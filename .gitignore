@@ -1,0 +1,7 @@
+dataset/
+testfiles/
+__pycache__/
+obj_save/
+
+*.zip
+*.bak
