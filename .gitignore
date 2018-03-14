@@ -2,6 +2,6 @@ dataset/
 testfiles/
 __pycache__/
 obj_save/
-
+udacity/
 *.zip
 *.bak
