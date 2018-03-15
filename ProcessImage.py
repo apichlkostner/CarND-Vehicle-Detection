@@ -9,6 +9,7 @@ import sklearn.svm as svm
 import sklearn.grid_search as grid_search
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage.measurements import label
+from skimage import data, exposure
 #from skimage.feature import hog
 from HelperFunctions import *
 
@@ -95,6 +96,7 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
         test_features = scaler.transform(np.array(features).reshape(1, -1))
         #6) Predict using your classifier
         prediction = clf.predict(test_features)
+        
         #7) If positive (prediction == 1) then save the window
         if prediction == 1:
             on_windows.append(window)
@@ -102,12 +104,12 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
     return on_windows
 
 # Define a single function that can extract features using hog sub-sampling and make predictions
-def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block,
-            spatial_size, hist_bins, color_space='RGB'):
+def find_cars(img, ystart, ystop, xstart, scale, clf, X_scaler, orient, pix_per_cell, cell_per_block,
+            spatial_size, hist_bins, color_space='RGB', frame_nr=0, folder=''):
     
     draw_img = np.copy(img)
     
-    img_tosearch = img[ystart:ystop,:,:]
+    img_tosearch = img[ystart:ystop,xstart:,:]
     #img_tosearch = img_tosearch.astype(np.float32) / 255
     #ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YCrCb')
 
@@ -148,9 +150,36 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
     t0 = time.time()
     #hog = np.zeros([3, ])
 
-    hog1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, feature_vec=False)
-    hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
-    hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
+    if True and (scale == 1):
+        #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16,16))
+        #ch1 = clahe.apply(ch1)
+        hog1, img1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, feature_vec=False, vis=True)
+        hog2, img2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False, vis=True)
+        hog3, img3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False, vis=True)
+        #img1 = exposure.rescale_intensity(img1, in_range=(0, 10))
+        #print('Shape = {} min = {}  max = {}'.format(img1.shape, img1.min(), img1.max()))
+        #cv2.imwrite(folder + 'hog/frame_hog1_{:04d}.jpg'.format(frame_nr), img1)
+        print('{} {} {}'.format(orient, pix_per_cell, cell_per_block))
+        #fd, hog_image = hog(ch3, orientations=8, pixels_per_cell=(16, 16),
+        #            cells_per_block=(1, 1), visualise=True)
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True)
+        ax1.axis('off')
+        ax1.imshow(ch3, cmap=plt.cm.gray)
+        ax1.set_title('Input image')
+
+        # Rescale histogram for better display
+        hog_image_rescaled = exposure.rescale_intensity(img3, in_range=(0, 10))
+
+        ax2.axis('off')
+        ax2.imshow(hog_image_rescaled, cmap=plt.cm.gray)
+        ax2.set_title('Histogram of Oriented Gradients')
+        plt.show()
+        #cv2.imwrite(folder + 'hog/frame_hog2_{:04d}.jpg'.format(frame_nr), img2)
+        #cv2.imwrite(folder + 'hog/frame_hog3_{:04d}.jpg'.format(frame_nr), img3)
+    else:
+        hog1 = get_hog_features(ch1, orient, pix_per_cell, cell_per_block, feature_vec=False)
+        hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
+        hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
     #print('Hog-shape = {}'.format(hog1.shape))
     t1 = time.time()
 
@@ -185,12 +214,18 @@ def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, ce
             # Scale features and make a prediction
             test_features = X_scaler.transform(np.hstack((hist_features, hog_features)).reshape(1, -1))    #, hist_features, hog_features)).reshape(1, -1))    
             #test_features = X_scaler.transform(np.hstack((shape_feat, hist_feat)).reshape(1, -1))    
-#            test_features[np.isnan(test_features)] = 0.0
-            test_prediction = svc.predict(test_features)
+            
+            proba = clf.predict_proba(test_features)
+            #print(proba)
+            test_prediction = 1 * (proba[0, 1] > 0.95)
+            #print(test_prediction)
+            test_prediction2 =clf.predict(test_features)
+            #print('Prob = {}, Pred = {}'.format(proba, test_prediction2))
+            #print(clf.predict_proba(test_features))
             
             if test_prediction == 1:
-                xbox_left = np.int(xleft*scale)
-                ytop_draw = np.int(ytop*scale+ystart)
+                xbox_left = np.int((xleft)*scale + xstart)
+                ytop_draw = np.int((ytop)*scale + ystart)
                 win_draw = np.int(window*scale)
                 boxes.append([[xbox_left, ytop_draw], [xbox_left+win_draw, ytop_draw+win_draw]])
                 #cv2.rectangle(draw_img,(xbox_left, ytop_draw+ystart),(xbox_left+win_draw,ytop_draw+win_draw+ystart),(0,0,255),6) 
@@ -213,15 +248,19 @@ class ProcessImage():
         self.spatial_feat = False # Spatial features on or off
         self.hist_feat = True # Histogram features on or off
         self.hog_feat = True # HOG features on or off
-        self.y_start_stop = [350, 680] # Min and max in y to search in slide_window()
+        self.y_start_stop = [350, 650] # Min and max in y to search in slide_window()
         self.heat = None
         self.thres_cnt = 0
         self.cnt = 0
+        self.DEBUG = True
+        self.frame_nr = 0
 
     def fit(self):
         # Read in cars and notcars
         cars = []
         notcars = []
+
+        self.frame_nr = 0
 
         carimages = glob.glob('dataset/vehicles/*/*.png')
         carimages.extend(glob.glob('dataset/vehicles/*/*.jpg'))
@@ -279,17 +318,18 @@ class ProcessImage():
         t=time.time()
 
         parameters = [{'kernel':('linear',), 'C': list(np.arange(0.5, 3., 0.1))},
-                      {'kernel':('rbf',), 'C': list(np.arange(0.5, 10., 0.1)), 'gamma': [0.002, 0.001, 0.007, 0.0005]},
+                      #{'kernel':('rbf',), 'C': list(np.arange(0.5, 10., 0.1)), 'gamma': [0.002, 0.001, 0.007, 0.0005]},
                     ]
         
-        if True:
+        if False:
             svr = svm.SVC()
             clf = grid_search.GridSearchCV(svr, parameters)
             clf.fit(X_train, y_train)
 
             print(clf.best_params_)
         else:
-            clf = svm.SVC(kernel='rbf', C=1.5, gamma=0.001)
+            #clf = svm.SVC(kernel='rbf', C=1.5, gamma=0.001)
+            clf = svm.SVC(kernel='linear', C=1.5, probability=True)
             clf.fit(X_train, y_train)
 
         # Use a linear SVC 
@@ -308,6 +348,9 @@ class ProcessImage():
 
 
     def process_image(self, img):
+        if self.DEBUG:
+            #folder = 'debug/project_video/'
+            folder = 'debug/test_video/'
         #plt.imshow(img)
         #plt.show()
         #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
@@ -334,13 +377,14 @@ class ProcessImage():
                                     hist_feat=self.hist_feat, hog_feat=self.hog_feat)
         else:
             box_list = []
-            for scale in [1.0, 1.5]:
-                box_list.extend(find_cars(img, self.y_start_stop[0], self.y_start_stop[1], scale, self.clf, self.X_scaler, self.orient,
-                            self.pix_per_cell, self.cell_per_block, self.spatial_size, self.hist_bins, self.color_space))
+            for scale in [1.0, 1.5, 2.0, 2.5, 3.0]:
+                box_list.extend(find_cars(img, self.y_start_stop[0], self.y_start_stop[1], 640, scale, self.clf, self.X_scaler, self.orient,
+                            self.pix_per_cell, self.cell_per_block, self.spatial_size, self.hist_bins, self.color_space,
+                            frame_nr=self.frame_nr, folder=folder))
 
         self.heat = add_heat(self.heat, box_list)
 
-        self.heat = apply_threshold(self.heat, 1)
+        self.heat = apply_threshold(self.heat, 2)
 
         #self.thres_cnt += 1
         #if self.thres_cnt > 10:
@@ -348,19 +392,29 @@ class ProcessImage():
         #    self.thres_cnt = 0
 
         
-        heatmap = np.clip(self.heat, 0, 255)
+        heatmap = np.clip(self.heat, 0, 10)
 
         heatmap_img = np.dstack((heatmap, np.zeros_like(heatmap), np.zeros_like(heatmap)))
 
         #print('Type img {}    type heatimg {}'.format(type(img), type(heatmap_img)))
 
-        draw_image = cv2.addWeighted(draw_image, 1., 5*heatmap_img, 1., 0)
+        draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img, 1., 0)
 
         # Find final boxes from heatmap using label function
         labels = label(heatmap)
 
         window_img = draw_labeled_bboxes(draw_image, labels)
+
+        window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
         #window_img = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
+
+        if self.DEBUG:
+            cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img)
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            window_img_bgr = cv2.cvtColor(window_img, cv2.COLOR_RGB2BGR)
+            cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img_bgr)
+            cv2.imwrite(folder + 'processed/frame_{:04d}.jpg'.format(self.frame_nr), window_img_bgr)
+            self.frame_nr += 1
 
         return window_img    
 

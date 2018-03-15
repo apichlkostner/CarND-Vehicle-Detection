@@ -7,17 +7,18 @@ from cv2 import HOGDescriptor
 def get_hog_features(img, orient, pix_per_cell, cell_per_block, 
                         vis=False, feature_vec=True):
     # Call with two outputs if vis==True
-    if False: #vis == True:
+    if vis == True:
         features, hog_image = hog(img, orientations=orient, 
                                   pixels_per_cell=(pix_per_cell, pix_per_cell),
                                   block_norm= 'L2-Hys',
                                   cells_per_block=(cell_per_block, cell_per_block), 
-                                  transform_sqrt=True, 
+                                  transform_sqrt=False, 
                                   visualise=vis, feature_vector=feature_vec)
         return features, hog_image
     # Otherwise call with one output
     else:
-        if True:
+        USE_SKIMAGE = True
+        if USE_SKIMAGE:
             features = hog(img, orientations=orient, 
                         pixels_per_cell=(pix_per_cell, pix_per_cell),
                         cells_per_block=(cell_per_block, cell_per_block), 
@@ -81,14 +82,14 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
 
         #feature_image = feature_image.astype(np.float) / 255.
 
-        if spatial_feat == True:
+        if spatial_feat:
             spatial_features = bin_spatial(feature_image, size=spatial_size)
             file_features.append(spatial_features)
-        if hist_feat == True:
+        if hist_feat:
             # Apply color_hist()
             hist_features = color_hist(feature_image, nbins=hist_bins)
             file_features.append(hist_features)
-        if hog_feat == True:
+        if hog_feat:
         # Call get_hog_features() with vis=False, feature_vec=True
             if hog_channel == 'ALL':
                 hog_features = []
@@ -158,7 +159,7 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
     # Iterate through the bounding boxes
     for bbox in bboxes:
         # Draw a rectangle given bbox coordinates
-        cv2.rectangle(imcopy, bbox[0], bbox[1], color, thick)
+        cv2.rectangle(imcopy, tuple(bbox[0]), tuple(bbox[1]), color, thick)
     # Return the image copy with boxes drawn
     return imcopy
 
@@ -167,9 +168,9 @@ def add_heat(heatmap, bbox_list):
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
         # Assuming each "box" takes the form ((x1, y1), (x2, y2))
-        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 2
+        heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
-    heatmap[heatmap > 0] -= 1
+    heatmap[heatmap >= 1] -= 1
 
     # Return updated heatmap
     return heatmap
