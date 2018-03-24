@@ -17,6 +17,7 @@ from HelperFunctions import *
 from FindCars import *
 
 from sklearn.model_selection import train_test_split
+import concurrent.futures
 
 # Define a function to extract features from a single image window
 # This function is very similar to extract_features()
@@ -130,6 +131,7 @@ class ProcessImage():
         self.DEBUG = True
         self.frame_nr = 0
         self.proba = True
+        self.parallel = 'process'
 
     def fit_new_model(self, pickle_file):
         # Read in cars and notcars
@@ -258,22 +260,20 @@ class ProcessImage():
         else:
             self.fit_new_model(pickle_file)
 
-        self.find_cars = FindCars()
-
-        swd = {'clf': self.clf, 'x_scaler': self.x_scaler, 'use_spatial': self.spatial_feat,
+        self.swd = {'clf': self.clf, 'x_scaler': self.x_scaler, 'use_spatial': self.spatial_feat,
                 'use_color': self.hist_feat,
                 'use_hog': self.hog_feat, 'proba': self.proba, 'pix_per_cell': self.pix_per_cell,
                 'cell_per_block': self.cell_per_block, 'spatial_size': self.spatial_size,
                 'hist_bins': self.hist_bins, 'orient': self.orient}
-
-        self.find_cars.fit(swd)
-
+        
+        self.find_cars = FindCars()
+        self.find_cars.fit(self.swd)
 
     def process_image(self, img):
         if self.DEBUG:
             folder = 'debug/project_video/'
             #folder = 'debug/test_video/'
-            if self.frame_nr < 0:
+            if self.frame_nr < 300:
                 self.frame_nr += 1
                 return img
         #plt.imshow(img)
@@ -299,21 +299,44 @@ class ProcessImage():
             box_list = []
             sliding_window_desc = [#{'scale': 0.5, 'y_top': 400, 'y_bottom': 500, 'x_left': 640, 'x_right': 1280},
                                    #{'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280},
-                                   {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280},
-                                   {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}
+                                   (img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
+                                   (img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
+                                   (img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
                                     ]
-            for swd in sliding_window_desc:
-                box, himg = self.find_cars.find_cars(img, swd)
-                #if scale == 1.0:
-                #    hog_img = himg
-                
-                box_list.extend(box)
+            t0 = time.time()
+            if self.parallel == 'thread':
+                find_cars = []
+                for i, swd in enumerate(sliding_window_desc):
+                        fc = FindCars()
+                        fc.fit(self.swd)
+                        fc.set_args(swd[0], swd[1])
+                        fc.start()
+
+                        find_cars.append(fc)
+                        #if scale == 1.0:
+                        #    hog_img = himg
+                    
+                for t in find_cars:
+                    t.join()
+                    box_list.extend(t.box)
+            elif self.parallel == 'sequential':
+                for i, swd in enumerate(sliding_window_desc):                    
+                    box, _ = self.find_cars.find_cars(swd)
+                    box_list.extend(box)
+            else:
+                with concurrent.futures.ProcessPoolExecutor() as executor:
+                    res = executor.map(self.find_cars.find_cars, sliding_window_desc)
+                    for r in res:
+                        box_list.extend(r[0])
+
+            t1 = time.time()
+            print('Time for alls scales: {:.3f}'.format(t1 - t0))
 
         self.heat = add_heat(self.heat, box_list)
 
-        self.heat = apply_threshold(self.heat, 1)
+        self.heat = apply_threshold(self.heat, 2)
         
-        self.heat = np.clip(self.heat, 0, 7)
+        self.heat = np.clip(self.heat, 0, 5)
 
         heatmap_img = np.dstack((self.heat, np.zeros_like(self.heat), np.zeros_like(self.heat)))
 
@@ -333,13 +356,11 @@ class ProcessImage():
         window_img = draw_labeled_bboxes(draw_image, labels)
         
         window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
-        #window_img = draw_boxes(draw_image, hot_windows, color=(0, 0, 255), thick=6)
 
         if self.DEBUG:
-            cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img)
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            #img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             window_img_bgr = cv2.cvtColor(window_img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img_bgr)
+            #cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img_bgr)
             cv2.imwrite(folder + 'processed/frame_{:04d}.jpg'.format(self.frame_nr), window_img_bgr)
             self.frame_nr += 1
 

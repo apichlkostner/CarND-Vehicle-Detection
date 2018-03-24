@@ -12,10 +12,13 @@ from scipy.ndimage.measurements import label
 from skimage import data, exposure
 import pickle
 from HelperFunctions import *
+import threading
 
 
-class FindCars():
+class FindCars():   #threading.Thread):
     def __init__(self):
+        # using processes is faster because of python lock
+        #threading.Thread.__init__(self)
         self.colorTransform = cv2.COLOR_RGB2YCrCb
         self.clf = None
         self.x_scaler = None
@@ -30,6 +33,10 @@ class FindCars():
         self.spatial_size = None
         self.hist_bins = None
         self.orient = None
+
+    def set_args(self, img, swd):
+        self.img = img
+        self.swd = swd
 
     def fit(self, swd):
         self.clf = swd['clf']
@@ -46,9 +53,12 @@ class FindCars():
         self.hist_bins = swd['hist_bins']
         self.orient = swd['orient']
 
+    def run(self):
+        self.box, self.himg = self.find_cars((self.img, self.swd))
+
     # Define a single function that can extract features using hog sub-sampling and make predictions
-    def find_cars(self, img, swd):
-        
+    def find_cars(self, args):
+        (img, swd) = args
         ystart = swd['y_top']
         ystop  = swd['y_bottom']
         xstart = swd['x_left']
@@ -186,8 +196,8 @@ class FindCars():
 
         num_windows = nxsteps * nysteps
         pos_rate = nr_positive / num_windows
-        print('Frame {}: {} windows with scale {}, pos rate {}, time {}'.format(self.frame_nr, num_windows, scale, pos_rate, t2 - t1))
+        print('{} windows with scale {}, pos rate {:.2f}, time {:.2f}'.format(num_windows, scale, pos_rate, t2 - t0))
 
-        self.frame_nr += 1
+        #self.frame_nr += 1        
 
-        return boxes, img1
+        return (boxes, img1)
