@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from sklearn.svm import LinearSVC, SVC
 import sklearn.svm as svm
-import sklearn.grid_search as grid_search
+from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage.measurements import label
 from skimage import data, exposure
@@ -16,10 +16,7 @@ import pickle
 from HelperFunctions import *
 from FindCars import *
 
-# NOTE: the next import is only valid for scikit-learn version <= 0.17
-# for scikit-learn >= 0.18 use:
-# from sklearn.model_selection import train_test_split
-from sklearn.cross_validation import train_test_split
+from sklearn.model_selection import train_test_split
 
 # Define a function to extract features from a single image window
 # This function is very similar to extract_features()
@@ -110,16 +107,21 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
 
 class ProcessImage():
     def __init__(self):
-        self.color_space = 'YCrCb' # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
-        self.orient = 9  # HOG orientations
-        self.pix_per_cell = 8 # HOG pixels per cell
-        self.cell_per_block = 2 # HOG cells per block
-        self.hog_channel = 'ALL' # Can be 0, 1, 2, or "ALL"
-        self.spatial_size = (32, 32) # Spatial binning dimensions
-        self.hist_bins = 16    # Number of histogram bins
-        self.spatial_feat = False # Spatial features on or off
-        self.hist_feat = True # Histogram features on or off
-        self.hog_feat = True # HOG features on or off
+        self.model_config = {'color_space': 'YCrCb', 'orient': 11,
+                             'pix_per_cell': 16, 'cell_per_block': 2,
+                             'hog_channel': 'ALL', 'spatial_size': (16, 16),
+                             'hist_bins': 16, 'spatial_feat': True,
+                             'hist_feat': True, 'hog_feat': True}
+        self.color_space = self.model_config['color_space'] # Can be RGB, HSV, LUV, HLS, YUV, YCrCb
+        self.orient = self.model_config['orient']  # HOG orientations
+        self.pix_per_cell = self.model_config['pix_per_cell'] # HOG pixels per cell
+        self.cell_per_block = self.model_config['cell_per_block'] # HOG cells per block
+        self.hog_channel = self.model_config['hog_channel'] # Can be 0, 1, 2, or "ALL"
+        self.spatial_size = self.model_config['spatial_size'] # Spatial binning dimensions
+        self.hist_bins =self.model_config['hist_bins']    # Number of histogram bins
+        self.spatial_feat = self.model_config['spatial_feat'] # Spatial features on or off
+        self.hist_feat = self.model_config['hist_feat'] # Histogram features on or off
+        self.hog_feat = self.model_config['hog_feat'] # HOG features on or off
         self.y_start_stop = [350, 650] # Min and max in y to search in slide_window()
         self.x_start_stop = [640, 1280]
         self.heat = None
@@ -129,6 +131,100 @@ class ProcessImage():
         self.frame_nr = 0
         self.proba = True
 
+    def fit_new_model(self, pickle_file):
+        # Read in cars and notcars
+        cars = []
+        notcars = []
+
+        self.frame_nr = 0
+
+        carimages = glob.glob('dataset/vehicles/*/*.png')
+        carimages.extend(glob.glob('dataset/vehicles/*/*.jpg'))
+        print("Number of car samples {}".format(len(carimages)))
+        for image in carimages:
+            cars.append(image)
+
+        noncarimages = glob.glob('dataset/non-vehicles/*/*.png')
+        noncarimages.extend(glob.glob('dataset/non-vehicles/*/*.jpg'))
+        print("Number of non-car samples {}".format(len(noncarimages)))
+        for image in noncarimages:
+            notcars.append(image)
+                
+
+        # Reduce the sample size because
+        # The quiz evaluator times out after 13s of CPU time
+        sample_size = None
+
+        if sample_size is not None:
+            cars = cars[0:sample_size]
+            notcars = notcars[0:sample_size]
+
+        car_features = extract_features(cars, color_space=self.color_space, 
+                                spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
+                                orient=self.orient, pix_per_cell=self.pix_per_cell, 
+                                cell_per_block=self.cell_per_block, 
+                                hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
+                                hist_feat=self.hist_feat, hog_feat=self.hog_feat)
+
+        print('Car features extracted, len = {}  shape = {}'.format(len(car_features), car_features[0].shape))
+
+        notcar_features = extract_features(notcars, color_space=self.color_space, 
+                                spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
+                                orient=self.orient, pix_per_cell=self.pix_per_cell, 
+                                cell_per_block=self.cell_per_block, 
+                                hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
+                                hist_feat=self.hist_feat, hog_feat=self.hog_feat)
+
+        print('Car features extracted, len = {}  shape = {}'.format(len(notcar_features), notcar_features[0].shape))
+        # Create an array stack of feature vectors
+        X = np.vstack((car_features, notcar_features)).astype(np.float64)
+        print('X.shape = {}'.format(X.shape))
+
+        # Define the labels vector
+        y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
+
+        # Split up data into randomized training and test sets
+        rand_state = np.random.randint(0, 100)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=rand_state)
+            
+        # Fit a per-column scaler
+        self.x_scaler = StandardScaler().fit(X_train)
+        # Apply the scaler to X
+        X_train = self.x_scaler.transform(X_train)
+        X_test = self.x_scaler.transform(X_test)
+
+        print('Using:',self.orient,'orientations',self.pix_per_cell,
+            'pixels per cell and', self.cell_per_block,'cells per block')
+        print('Feature vector length:', len(X_train[0]))
+
+        t=time.time()
+
+        parameters = [{'kernel':('linear',), 'C': list(np.arange(0.5, 3., 0.1))},
+                    #{'kernel':('rbf',), 'C': list(np.arange(0.5, 10., 0.1)), 'gamma': [0.002, 0.001, 0.007, 0.0005]},
+                    ]
+        
+        if False:
+            print('Searching for best classifier...')
+            svr = svm.SVC()
+            clf = GridSearchCV(svr, parameters)
+            clf.fit(X_train, y_train)
+
+            print(clf.best_params_)
+        else:
+            print('Fitting train set...')
+            clf = svm.SVC(kernel='linear', C=0.01, probability=self.proba)
+            clf.fit(X_train, y_train)
+
+        t2 = time.time()
+        print(round(t2-t, 2), 'Seconds to train SVC...')
+        print('Test Accuracy of SVC = ', round(clf.score(X_test, y_test), 4))
+
+        self.clf = clf
+
+        with pickle_file.open(mode='wb') as f:
+            model_map = {'model': self.clf, 'x_scaler': self.x_scaler, 'model_config': self.model_config}
+            pickle.dump(model_map, f)
 
     def fit(self):
         pickle_file = Path('SVM.p')
@@ -136,103 +232,31 @@ class ProcessImage():
         if pickle_file.is_file():
             with pickle_file.open(mode=('rb')) as f:
                 print('Loading model {}'.format(pickle_file.name))
-                model_map = pickle.load(f)
-                self.clf = model_map['model']
-                self.x_scaler = model_map['x_scaler']
+                try:
+                    model_map = pickle.load(f)
+                    self.clf = model_map['model']
+                    self.x_scaler = model_map['x_scaler']
+
+                    if 'model_config' in model_map:
+                        print('Loading model parameter from file {}'.format(pickle_file.name))
+                        self.model_config = model_map['model_config']
+                        self.color_space = self.model_config['color_space']
+                        self.orient = self.model_config['orient']
+                        self.pix_per_cell = self.model_config['pix_per_cell']
+                        self.cell_per_block = self.model_config['cell_per_block']
+                        self.hog_channel = self.model_config['hog_channel']
+                        self.spatial_size = self.model_config['spatial_size']
+                        self.hist_bins =self.model_config['hist_bins']
+                        self.spatial_feat = self.model_config['spatial_feat']
+                        self.hist_feat = self.model_config['hist_feat']
+                        self.hog_feat = self.model_config['hog_feat']
+                    else:
+                        print('\033[93mWarning: model parameter not contained in {}\033[0m'.format(pickle_file.name))
+                except EOFError:
+                    print('\033[93mWarning: error in {} - fit model from scratch\033[0m'.format(pickle_file.name))
+                    self.fit_new_model(pickle_file)
         else:
-            # Read in cars and notcars
-            cars = []
-            notcars = []
-
-            self.frame_nr = 0
-
-            carimages = glob.glob('dataset/vehicles/*/*.png')
-            carimages.extend(glob.glob('dataset/vehicles/*/*.jpg'))
-            print("Number of car samples {}".format(len(carimages)))
-            for image in carimages:
-                cars.append(image)
-
-            noncarimages = glob.glob('dataset/non-vehicles/*/*.png')
-            noncarimages.extend(glob.glob('dataset/non-vehicles/*/*.jpg'))
-            print("Number of non-car samples {}".format(len(noncarimages)))
-            for image in noncarimages:
-                notcars.append(image)
-                    
-
-            # Reduce the sample size because
-            # The quiz evaluator times out after 13s of CPU time
-            sample_size = 3000
-
-            if sample_size is not None:
-                cars = cars[0:sample_size]
-                notcars = notcars[0:sample_size]
-
-            car_features = extract_features(cars, color_space=self.color_space, 
-                                    spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
-                                    orient=self.orient, pix_per_cell=self.pix_per_cell, 
-                                    cell_per_block=self.cell_per_block, 
-                                    hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
-                                    hist_feat=self.hist_feat, hog_feat=self.hog_feat)
-
-            print('Car features extracted, len = {}  shape = {}'.format(len(car_features), car_features[0].shape))
-
-            notcar_features = extract_features(notcars, color_space=self.color_space, 
-                                    spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
-                                    orient=self.orient, pix_per_cell=self.pix_per_cell, 
-                                    cell_per_block=self.cell_per_block, 
-                                    hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
-                                    hist_feat=self.hist_feat, hog_feat=self.hog_feat)
-
-            print('Car features extracted, len = {}  shape = {}'.format(len(notcar_features), notcar_features[0].shape))
-            # Create an array stack of feature vectors
-            X = np.vstack((car_features, notcar_features)).astype(np.float64)
-            print('X.shape = {}'.format(X.shape))
-
-            # Define the labels vector
-            y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
-
-            # Split up data into randomized training and test sets
-            rand_state = np.random.randint(0, 100)
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=rand_state)
-                
-            # Fit a per-column scaler
-            self.x_scaler = StandardScaler().fit(X_train)
-            # Apply the scaler to X
-            X_train = self.x_scaler.transform(X_train)
-            X_test = self.x_scaler.transform(X_test)
-
-            print('Using:',self.orient,'orientations',self.pix_per_cell,
-                'pixels per cell and', self.cell_per_block,'cells per block')
-            print('Feature vector length:', len(X_train[0]))
-
-            t=time.time()
-
-            parameters = [{'kernel':('linear',), 'C': list(np.arange(0.5, 3., 0.1))},
-                        #{'kernel':('rbf',), 'C': list(np.arange(0.5, 10., 0.1)), 'gamma': [0.002, 0.001, 0.007, 0.0005]},
-                        ]
-            
-            if False:
-                print('Searching for best classifier...')
-                svr = svm.SVC()
-                clf = grid_search.GridSearchCV(svr, parameters)
-                clf.fit(X_train, y_train)
-
-                print(clf.best_params_)
-            else:
-                print('Fitting train set...')
-                clf = svm.SVC(kernel='linear', C=0.01, probability=self.proba)
-                clf.fit(X_train, y_train)
-
-            t2 = time.time()
-            print(round(t2-t, 2), 'Seconds to train SVC...')
-            print('Test Accuracy of SVC = ', round(clf.score(X_test, y_test), 4))
-
-            self.clf = clf
-
-            with pickle_file.open(mode='wb') as f:
-                model_map = {'model': self.clf, 'x_scaler': self.x_scaler}
-                pickle.dump(model_map, f)
+            self.fit_new_model(pickle_file)
 
         self.find_cars = FindCars()
 
@@ -287,7 +311,7 @@ class ProcessImage():
 
         self.heat = add_heat(self.heat, box_list)
 
-        self.heat = apply_threshold(self.heat, 3)
+        self.heat = apply_threshold(self.heat, 1)
         
         self.heat = np.clip(self.heat, 0, 7)
 

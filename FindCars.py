@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 from sklearn.svm import LinearSVC, SVC
 import sklearn.svm as svm
-import sklearn.grid_search as grid_search
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage.measurements import label
 from skimage import data, exposure
@@ -36,7 +35,7 @@ class FindCars():
         self.clf = swd['clf']
         self.x_scaler = swd['x_scaler']
         self.frame_nr = 0
-        self.debug_folder = ''
+        self.debug_folder = 'debug/project_video/'
         self.use_spatial_features = swd['use_spatial']
         self.use_color_features = swd['use_color']
         self.use_hog_features = swd['use_hog']
@@ -79,14 +78,14 @@ class FindCars():
         # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
         window = 64
         nblocks_per_window = (window // self.pix_per_cell) - self.cell_per_block + 1
-        cells_per_step = 2  # Instead of overlap, define how many cells to step
+        cells_per_step = 1  # Instead of overlap, define how many cells to step
         nxsteps = (nxblocks - nblocks_per_window) // cells_per_step + 1
         nysteps = (nyblocks - nblocks_per_window) // cells_per_step + 1
         
         # Compute individual channel HOG features for the entire image
         t0 = time.time()
 
-        if False: #True and (scale == 1):
+        if True and (scale == 1):
             #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16,16))
             #ch1 = clahe.apply(ch1)
             hog1, img1 = get_hog_features(ch1, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False, vis=True)
@@ -117,9 +116,9 @@ class FindCars():
                 img1 = (img1 / img1.max() * 255).astype(np.uint8) 
                 img2 = (img2 / img2.max() * 255).astype(np.uint8) 
                 img3 = (img3 / img3.max() * 255).astype(np.uint8) 
-                cv2.imwrite(self.folder + 'hog/frame_hog1_{:04d}.jpg'.format(self.frame_nr), img1)
-                cv2.imwrite(self.folder + 'hog/frame_hog2_{:04d}.jpg'.format(self.frame_nr), img2)
-                cv2.imwrite(self.folder + 'hog/frame_hog3_{:04d}.jpg'.format(self.frame_nr), img3)
+                cv2.imwrite(self.debug_folder + 'hog/frame_hog1_{:04d}.jpg'.format(self.frame_nr), img1)
+                cv2.imwrite(self.debug_folder + 'hog/frame_hog2_{:04d}.jpg'.format(self.frame_nr), img2)
+                cv2.imwrite(self.debug_folder + 'hog/frame_hog3_{:04d}.jpg'.format(self.frame_nr), img3)
         else:
             img1 = []
             hog1 = get_hog_features(ch1, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False)
@@ -129,24 +128,16 @@ class FindCars():
         t1 = time.time()
 
         boxes = []
+        nr_positive = 0
 
         for xb in range(nxsteps):
             for yb in range(nysteps):
-                if self.use_hog_features:
-                    ypos = yb*cells_per_step
-                    xpos = xb*cells_per_step
-
-                    features = []
-
-                    # Extract HOG for this patch
-                    hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-                    hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-                    hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
-                    hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
-                    features.append(hog_features)
-
+                ypos = yb*cells_per_step
+                xpos = xb*cells_per_step
                 xleft = xpos * self.pix_per_cell
                 ytop = ypos * self.pix_per_cell
+
+                features = []
 
                 # Extract the image patch
                 subimg = ctrans_tosearch[ytop:ytop+window, xleft:xleft+window]
@@ -163,6 +154,14 @@ class FindCars():
                     hist_features = color_hist(subimg, nbins=self.hist_bins)
                     features.append(hist_features)
 
+                if self.use_hog_features:
+                    # Extract HOG for this patch
+                    hog_feat1 = hog1[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+                    hog_feat2 = hog2[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+                    hog_feat3 = hog3[ypos:ypos+nblocks_per_window, xpos:xpos+nblocks_per_window].ravel() 
+                    hog_features = np.hstack((hog_feat1, hog_feat2, hog_feat3))
+                    features.append(hog_features)
+
                 # Scale features and make a prediction
                 test_features = self.x_scaler.transform(np.hstack(features).reshape(1, -1))
                 
@@ -177,6 +176,7 @@ class FindCars():
                 #print('Prob = {}, Pred = {}'.format(proba, test_prediction2))
                 
                 if test_prediction == 1:
+                    nr_positive += 1.
                     xbox_left = np.int((xleft)*scale + xstart)
                     ytop_draw = np.int((ytop)*scale + ystart)
                     win_draw = np.int(window*scale)
@@ -184,6 +184,10 @@ class FindCars():
         
         t2 = time.time()
 
-        print('{} windows with scale {} needed time {}'.format(nxsteps * nysteps, scale, t2 - t1))
+        num_windows = nxsteps * nysteps
+        pos_rate = nr_positive / num_windows
+        print('Frame {}: {} windows with scale {}, pos rate {}, time {}'.format(self.frame_nr, num_windows, scale, pos_rate, t2 - t1))
+
+        self.frame_nr += 1
 
         return boxes, img1

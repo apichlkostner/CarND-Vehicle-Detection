@@ -174,12 +174,10 @@ def add_heat(heatmap, bbox_list):
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
         # Assuming each "box" takes the form ((x1, y1), (x2, y2))
-        #heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
-        #print(box)
         heatmap[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
 
     #print('Heatmap reduce {}  max = {}'.format((heatmap >= 1).sum(), heatmap.max()))
-    num = heatmap[:, 1230:]
+    #num = heatmap[:, 1230:]
     #print('Right part min {}  max {}  mean {}'.format(num.min(), num.max(), num.mean()))
     heatmap[heatmap >= 1] -= 1
     #print('Heatmap reduce after {}  max = {}'.format((heatmap >= 1).sum(), heatmap.max()))
