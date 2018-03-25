@@ -133,96 +133,122 @@ class ProcessImage():
         self.proba = True
         self.parallel = 'process'
 
-    def fit_new_model(self, pickle_file):
-        # Read in cars and notcars
-        cars = []
-        notcars = []
+    def fit_model(self, args):        
+        print('Fitting model with C={}'.format(args['C']))
+        t0 = time.time()
+        clf = svm.SVC(kernel='linear', C=args['C'], probability=self.proba)
+        clf.fit(args['x_train'], args['y_train'])
+        test_score = clf.score(args['x_test'], args['y_test'])
+        t1 = time.time()
+        print('Fitted model with C={} in time {:.1f}'.format(args['C'], t1 - t0))
 
+        return clf, test_score
+
+    def fit_new_model(self, pickle_file):
         self.frame_nr = 0
 
-        carimages = glob.glob('dataset/vehicles/*/*.png')
-        carimages.extend(glob.glob('dataset/vehicles/*/*.jpg'))
-        print("Number of car samples {}".format(len(carimages)))
-        for image in carimages:
-            cars.append(image)
+        main_path = 'dataset/split/'
+        carimages = glob.glob(main_path + 'train/car/*/*.png')
+        carimages.extend(glob.glob(main_path + 'train/car/*/*.jpg'))
+        print("Number of car training samples {}".format(len(carimages)))
 
-        noncarimages = glob.glob('dataset/non-vehicles/*/*.png')
-        noncarimages.extend(glob.glob('dataset/non-vehicles/*/*.jpg'))
-        print("Number of non-car samples {}".format(len(noncarimages)))
-        for image in noncarimages:
-            notcars.append(image)
-                
+        noncarimages = glob.glob(main_path + 'train/noncar/*/*.png')
+        noncarimages.extend(glob.glob(main_path + 'train/noncar/*/*.jpg'))
+        print("Number of non-car training samples {}".format(len(noncarimages)))                
 
-        # Reduce the sample size because
-        # The quiz evaluator times out after 13s of CPU time
+        train_data = {'car': carimages, 'noncar': noncarimages}
+
+        main_path = 'dataset/split/'
+        carimages = glob.glob(main_path + 'test/car/*/*.png')
+        carimages.extend(glob.glob(main_path + 'test/car/*/*.jpg'))
+        print("Number of car test samples {}".format(len(carimages)))
+
+        noncarimages = glob.glob(main_path + 'test/noncar/*/*.png')
+        noncarimages.extend(glob.glob(main_path + 'test/noncar/*/*.jpg'))
+        print("Number of non-car test samples {}".format(len(noncarimages)))                
+
+        test_data = {'car': carimages, 'noncar': noncarimages}
+        
+        # for faster test sample size can be reduced
         sample_size = None
 
         if sample_size is not None:
-            cars = cars[0:sample_size]
-            notcars = notcars[0:sample_size]
+            train_data['car'] = train_data['car'][0:sample_size]
+            train_data['noncar'] = train_data['noncar'][0:sample_size]
+            test_data['car'] = test_data['car'][0:sample_size // 5]
+            test_data['noncar'] = test_data['noncar'][0:sample_size // 5]
+            
 
-        car_features = extract_features(cars, color_space=self.color_space, 
-                                spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
-                                orient=self.orient, pix_per_cell=self.pix_per_cell, 
-                                cell_per_block=self.cell_per_block, 
-                                hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
-                                hist_feat=self.hist_feat, hog_feat=self.hog_feat)
+        t0 = time.time()
 
-        print('Car features extracted, len = {}  shape = {}'.format(len(car_features), car_features[0].shape))
+        arguments = [(train_data['car'], self.model_config),
+                     (train_data['noncar'], self.model_config),
+                     (test_data['car'], self.model_config),
+                     (test_data['noncar'], self.model_config)]
+        input_type = ['train_cars', 'train_noncars', 'test_cars', 'test_noncars']
 
-        notcar_features = extract_features(notcars, color_space=self.color_space, 
-                                spatial_size=self.spatial_size, hist_bins=self.hist_bins, 
-                                orient=self.orient, pix_per_cell=self.pix_per_cell, 
-                                cell_per_block=self.cell_per_block, 
-                                hog_channel=self.hog_channel, spatial_feat=self.spatial_feat, 
-                                hist_feat=self.hist_feat, hog_feat=self.hog_feat)
+        data = {}
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for category, feature_data in zip(input_type, executor.map(extract_features_map, arguments)):
+                data[category] = feature_data
+                print('{} features extracted, len = {}  shape = {}'.format(category, len(feature_data),
+                                                                         feature_data[0].shape))
 
-        print('Car features extracted, len = {}  shape = {}'.format(len(notcar_features), notcar_features[0].shape))
+        t1 = time.time()
+        print('Feature extraction, time {:.2f}'.format(t1 - t0))
+        
         # Create an array stack of feature vectors
-        X = np.vstack((car_features, notcar_features)).astype(np.float64)
-        print('X.shape = {}'.format(X.shape))
+        x_train = np.vstack((data['train_cars'], data['train_noncars'])).astype(np.float64)
+        x_test  = np.vstack((data['test_cars'], data['test_noncars'])).astype(np.float64)
+        print('x_train.shape = {}'.format(x_train.shape))
+        print('x_test.shape = {}'.format(x_test.shape))
 
         # Define the labels vector
-        y = np.hstack((np.ones(len(car_features)), np.zeros(len(notcar_features))))
-
-        # Split up data into randomized training and test sets
-        rand_state = np.random.randint(0, 100)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=rand_state)
+        y_train = np.hstack((np.ones(len(data['train_cars'])), np.zeros(len(data['train_noncars']))))
+        y_test = np.hstack((np.ones(len(data['test_cars'])), np.zeros(len(data['test_noncars']))))
             
         # Fit a per-column scaler
-        self.x_scaler = StandardScaler().fit(X_train)
+        self.x_scaler = StandardScaler().fit(x_train)
         # Apply the scaler to X
-        X_train = self.x_scaler.transform(X_train)
-        X_test = self.x_scaler.transform(X_test)
+        x_train = self.x_scaler.transform(x_train)
+        x_test = self.x_scaler.transform(x_test)
 
         print('Using:',self.orient,'orientations',self.pix_per_cell,
             'pixels per cell and', self.cell_per_block,'cells per block')
-        print('Feature vector length:', len(X_train[0]))
+        print('Feature vector length:', len(x_train[0]))
 
-        t=time.time()
-
-        parameters = [{'kernel':('linear',), 'C': list(np.arange(0.5, 3., 0.1))},
-                    #{'kernel':('rbf',), 'C': list(np.arange(0.5, 10., 0.1)), 'gamma': [0.002, 0.001, 0.007, 0.0005]},
-                    ]
         
-        if False:
-            print('Searching for best classifier...')
-            svr = svm.SVC()
-            clf = GridSearchCV(svr, parameters)
-            clf.fit(X_train, y_train)
+        print('Searching for best parameters...')
+        C_params = [0.0001, 0.001, 0.01, 0.1]
+        models = {}
+        score_max = 0.
+        params = [{'C': 0.0001, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
+                  {'C': 0.001, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
+                  {'C': 0.01, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
+                  {'C': 0.1, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
+                 ]
+        t2=time.time()
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for C, result in zip(C_params, executor.map(self.fit_model, params)):
+                models[C] = result
+                print('Model fitted with C={}, score={:.4f}'.format(C, result[1]))
+                if result[1] > score_max:
+                    score_max = result[1]
+                    self.clf = result[0]
+        t3 = time.time()
+        print('Time for searching parameter: {:.1f}'.format(t3 - t2))
+        # for C in C_params:
+        #     t2=time.time()
+        #     clf = svm.SVC(kernel='linear', C=C, probability=self.proba)
+        #     clf.fit(x_train, y_train)
+        #     test_score = clf.score(x_test, y_test)
+        #     models[C] = (clf, test_score)
+        #     t3 = time.time()
 
-            print(clf.best_params_)
-        else:
-            print('Fitting train set...')
-            clf = svm.SVC(kernel='linear', C=0.01, probability=self.proba)
-            clf.fit(X_train, y_train)
-
-        t2 = time.time()
-        print(round(t2-t, 2), 'Seconds to train SVC...')
-        print('Test Accuracy of SVC = ', round(clf.score(X_test, y_test), 4))
-
-        self.clf = clf
+        #     if test_score > score_max:
+        #         self.clf = clf
+        #         score_max = test_score
+        #     print('Model with C = {}, score = {:.5f}, time = {:.1f}'.format(C, test_score, t3-t2))
 
         with pickle_file.open(mode='wb') as f:
             model_map = {'model': self.clf, 'x_scaler': self.x_scaler, 'model_config': self.model_config}
@@ -273,7 +299,7 @@ class ProcessImage():
         if self.DEBUG:
             folder = 'debug/project_video/'
             #folder = 'debug/test_video/'
-            if self.frame_nr < 300:
+            if self.frame_nr < 0:
                 self.frame_nr += 1
                 return img
         #plt.imshow(img)

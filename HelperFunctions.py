@@ -51,6 +51,15 @@ def color_hist(img, nbins=32, bins_range=(0, 255)):
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
 
+def extract_features_map(input):
+    imgs, confmap = input
+    
+    return extract_features(imgs, color_space=confmap['color_space'], spatial_size=confmap['spatial_size'],
+                        hist_bins=confmap['hist_bins'], orient=confmap['orient'],
+                        pix_per_cell=confmap['pix_per_cell'], cell_per_block=confmap['cell_per_block'],
+                         hog_channel=confmap['hog_channel'], spatial_feat=confmap['spatial_feat'],
+                        hist_feat=confmap['hist_feat'], hog_feat=confmap['hog_feat'])
+
 # Define a function to extract features from a list of images
 # Have this function call bin_spatial() and color_hist()
 def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
@@ -58,7 +67,7 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
                         pix_per_cell=8, cell_per_block=2, hog_channel=0,
                         spatial_feat=True, hist_feat=True, hog_feat=True):
     # Create a list to append feature vectors to
-    features = []
+    feature_vectors = []
     # Iterate through the list of images
     for file in imgs:
         #print('Processing {}'.format(file))
@@ -67,6 +76,7 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
         image = cv2.imread(file)
 
         if image.shape != (64, 64, 3):
+            # ignore files with wrong shape
             print('Wrong image size {} of file {}'.format(image.shape, file))
             #assert(image.shape == (64, 64, 3))
         else:
@@ -86,15 +96,18 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
                     feature_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             else: feature_image = np.copy(image)
 
-            #feature_image = feature_image.astype(np.float) / 255.
-
+            # spatial features
             if spatial_feat:
                 spatial_features = bin_spatial(feature_image, size=spatial_size)
                 file_features.append(spatial_features)
+
+            # color histogram features
             if hist_feat:
                 # Apply color_hist()
                 hist_features = color_hist(feature_image, nbins=hist_bins)
                 file_features.append(hist_features)
+
+            # hog features
             if hog_feat:
             # Call get_hog_features() with vis=False, feature_vec=True
                 if hog_channel == 'ALL':
@@ -109,9 +122,12 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
                                 pix_per_cell, cell_per_block, vis=False, feature_vec=True)
                 # Append the new feature vector to the features list
                 file_features.append(hog_features)
-            features.append(np.concatenate(file_features))
+
+            # append features of current file to list of feature vectors
+            feature_vectors.append(np.concatenate(file_features))
+
     # Return list of feature vectors
-    return features
+    return feature_vectors
     
 # Define a function that takes an image,
 # start and stop positions in both x and y, 
@@ -171,6 +187,7 @@ def draw_boxes(img, bboxes, color=(0, 0, 255), thick=6):
 
 def add_heat(heatmap, bbox_list):
     # Iterate through list of bboxes
+    
     for box in bbox_list:
         # Add += 1 for all pixels inside each bbox
         # Assuming each "box" takes the form ((x1, y1), (x2, y2))

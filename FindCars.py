@@ -88,7 +88,7 @@ class FindCars():   #threading.Thread):
         # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
         window = 64
         nblocks_per_window = (window // self.pix_per_cell) - self.cell_per_block + 1
-        cells_per_step = 1  # Instead of overlap, define how many cells to step
+        cells_per_step = window // self.pix_per_cell // 4  # Instead of overlap, define how many cells to step
         nxsteps = (nxblocks - nblocks_per_window) // cells_per_step + 1
         nysteps = (nyblocks - nblocks_per_window) // cells_per_step + 1
         
@@ -96,39 +96,18 @@ class FindCars():   #threading.Thread):
         t0 = time.time()
 
         if True and (scale == 1):
-            #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16,16))
-            #ch1 = clahe.apply(ch1)
             hog1, img1 = get_hog_features(ch1, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False, vis=True)
             hog2, img2 = get_hog_features(ch2, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False, vis=True)
             hog3, img3 = get_hog_features(ch3, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False, vis=True)
-            if False:
-                #img1 = exposure.rescale_intensity(img1, in_range=(0, 10))
-                #print('Shape = {} min = {}  max = {}'.format(img1.shape, img1.min(), img1.max()))
-                #cv2.imwrite(folder + 'hog/frame_hog1_{:04d}.jpg'.format(frame_nr), img1)
-                print('{} {} {}'.format(self.orient, self.pix_per_cell, self.cell_per_block))
-                #fd, hog_image = hog(ch3, orientations=8, pixels_per_cell=(16, 16),
-                #            cells_per_block=(1, 1), visualise=True)
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4), sharex=True, sharey=True)
-                ax1.axis('off')
-                ax1.imshow(ch3, cmap=plt.cm.gray)
-                ax1.set_title('Input image')
-
-                # Rescale histogram for better display
-                hog_image_rescaled = exposure.rescale_intensity(img3, in_range=(0, 10))
-
-                ax2.axis('off')
-                ax2.imshow(hog_image_rescaled, cmap=plt.cm.gray)
-                ax2.set_title('Histogram of Oriented Gradients')
-                plt.show()
 
             if True:
-                #print('Min {}  max {}  mean {}'.format(img1.min(), img1.max(), img1.mean()))
                 img1 = (img1 / img1.max() * 255).astype(np.uint8) 
                 img2 = (img2 / img2.max() * 255).astype(np.uint8) 
                 img3 = (img3 / img3.max() * 255).astype(np.uint8) 
                 cv2.imwrite(self.debug_folder + 'hog/frame_hog1_{:04d}.jpg'.format(self.frame_nr), img1)
                 cv2.imwrite(self.debug_folder + 'hog/frame_hog2_{:04d}.jpg'.format(self.frame_nr), img2)
                 cv2.imwrite(self.debug_folder + 'hog/frame_hog3_{:04d}.jpg'.format(self.frame_nr), img3)
+                self.frame_nr += 1
         else:
             img1 = []
             hog1 = get_hog_features(ch1, self.orient, self.pix_per_cell, self.cell_per_block, feature_vec=False)
@@ -177,7 +156,6 @@ class FindCars():   #threading.Thread):
                 
                 if self.proba:
                     # use probalibilies
-                    #print('Use proba = {}'.format(self.clf.predict_proba(test_features)))
                     proba = self.clf.predict_proba(test_features)
                     test_prediction = 1 * (proba[0, 1] > 0.95)
                 else:
@@ -196,8 +174,6 @@ class FindCars():   #threading.Thread):
 
         num_windows = nxsteps * nysteps
         pos_rate = nr_positive / num_windows
-        print('{} windows with scale {}, pos rate {:.2f}, time {:.2f}'.format(num_windows, scale, pos_rate, t2 - t0))
-
-        #self.frame_nr += 1        
+        print('{} windows with scale {}, pos rate {:.3f}, time {:.2f}'.format(num_windows, scale, pos_rate, t2 - t0))
 
         return (boxes, img1)
