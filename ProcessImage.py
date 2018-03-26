@@ -104,12 +104,27 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
     #8) Return windows for positive detections
     return on_windows
 
+def fit_model(args):
+    """
+    Fits model to train set and checks agains test set
+    It's not included to a class since it should be called as a separate process.
+    Inside a class the complete class would be pickled and copied to the
+    address space of the new process which needs much ram.
+    """
+    print('Fitting model with C={}'.format(args['C']))
+    t0 = time.time()
+    clf = svm.SVC(kernel='linear', C=args['C'], probability=args['proba'])
+    clf.fit(args['x_train'], args['y_train'])
+    test_score = clf.score(args['x_test'], args['y_test'])
+    t1 = time.time()
+    print('Fitted model with C={} in time {:.1f}'.format(args['C'], t1 - t0))
 
+    return clf, test_score
 
 class ProcessImage():
     def __init__(self):
-        self.model_config = {'color_space': 'YCrCb', 'orient': 11,
-                             'pix_per_cell': 16, 'cell_per_block': 2,
+        self.model_config = {'color_space': 'YCrCb', 'orient': 9,
+                             'pix_per_cell': 16, 'cell_per_block': 4,
                              'hog_channel': 'ALL', 'spatial_size': (16, 16),
                              'hist_bins': 16, 'spatial_feat': True,
                              'hist_feat': True, 'hog_feat': True}
@@ -133,16 +148,7 @@ class ProcessImage():
         self.proba = True
         self.parallel = 'process'
 
-    def fit_model(self, args):        
-        print('Fitting model with C={}'.format(args['C']))
-        t0 = time.time()
-        clf = svm.SVC(kernel='linear', C=args['C'], probability=self.proba)
-        clf.fit(args['x_train'], args['y_train'])
-        test_score = clf.score(args['x_test'], args['y_test'])
-        t1 = time.time()
-        print('Fitted model with C={} in time {:.1f}'.format(args['C'], t1 - t0))
-
-        return clf, test_score
+    
 
     def fit_new_model(self, pickle_file):
         self.frame_nr = 0
@@ -219,36 +225,30 @@ class ProcessImage():
 
         
         print('Searching for best parameters...')
-        C_params = [0.0001, 0.001, 0.01, 0.1]
+        C_params = [0.01, 0.1, 1., 10.]
         models = {}
         score_max = 0.
-        params = [{'C': 0.0001, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
-                  {'C': 0.001, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
-                  {'C': 0.01, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
-                  {'C': 0.1, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test},
-                 ]
+        params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,
+                   'proba': self.proba}
+                            for C in C_params]
         t2=time.time()
         with concurrent.futures.ProcessPoolExecutor() as executor:
-            for C, result in zip(C_params, executor.map(self.fit_model, params)):
+            for C, result in zip(C_params, executor.map(fit_model, params)):
                 models[C] = result
                 print('Model fitted with C={}, score={:.4f}'.format(C, result[1]))
+
+                # save all model to be tested on video
+                f_save = Path('saves/SVM_C{}_score{:.3f}.p'.format(C, result[1]))
+                with f_save.open(mode='wb') as f:
+                    model_map = {'model': result[0], 'x_scaler': self.x_scaler, 'model_config': self.model_config}
+                    pickle.dump(model_map, f)
+
+                # save best model
                 if result[1] > score_max:
                     score_max = result[1]
                     self.clf = result[0]
         t3 = time.time()
         print('Time for searching parameter: {:.1f}'.format(t3 - t2))
-        # for C in C_params:
-        #     t2=time.time()
-        #     clf = svm.SVC(kernel='linear', C=C, probability=self.proba)
-        #     clf.fit(x_train, y_train)
-        #     test_score = clf.score(x_test, y_test)
-        #     models[C] = (clf, test_score)
-        #     t3 = time.time()
-
-        #     if test_score > score_max:
-        #         self.clf = clf
-        #         score_max = test_score
-        #     print('Model with C = {}, score = {:.5f}, time = {:.1f}'.format(C, test_score, t3-t2))
 
         with pickle_file.open(mode='wb') as f:
             model_map = {'model': self.clf, 'x_scaler': self.x_scaler, 'model_config': self.model_config}
@@ -362,7 +362,7 @@ class ProcessImage():
 
         self.heat = apply_threshold(self.heat, 2)
         
-        self.heat = np.clip(self.heat, 0, 5)
+        self.heat = np.clip(self.heat, 0, 3)
 
         heatmap_img = np.dstack((self.heat, np.zeros_like(self.heat), np.zeros_like(self.heat)))
 
