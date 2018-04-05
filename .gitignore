@@ -3,5 +3,7 @@ testfiles/
 __pycache__/
 obj_save/
 udacity/
+debug/
+saves/
 *.zip
 *.bak

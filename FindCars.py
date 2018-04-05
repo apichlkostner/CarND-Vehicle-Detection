@@ -39,14 +39,14 @@ class FindCars():   #threading.Thread):
         self.swd = swd
 
     def fit(self, swd):
-        self.clf = swd['clf']
+        self.clf = swd['model']
         self.x_scaler = swd['x_scaler']
         self.frame_nr = 0
         self.debug_folder = 'debug/project_video/'
-        self.use_spatial_features = swd['use_spatial']
-        self.use_color_features = swd['use_color']
-        self.use_hog_features = swd['use_hog']
-        self.proba = swd['proba']
+        self.use_spatial_features = swd['spatial_feat']
+        self.use_color_features = swd['hist_feat']
+        self.use_hog_features = swd['hog_feat']
+        self.proba = swd['probability']
         self.pix_per_cell = swd['pix_per_cell']
         self.cell_per_block = swd['cell_per_block']
         self.spatial_size = swd['spatial_size']
