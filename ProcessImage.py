@@ -161,11 +161,11 @@ class ProcessImage():
                                     hist_feat=self.model_config['hist_feat'], hog_feat=self.model_config['hog_feat'])
         else:
             box_list = []
-            sliding_window_desc = [#{'scale': 0.5, 'y_top': 400, 'y_bottom': 500, 'x_left': 640, 'x_right': 1280},
-                                   #{'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280},
+            sliding_window_desc = [#(img, {'scale': 0.5, 'y_top': 400, 'y_bottom': 500, 'x_left': 640, 'x_right': 1280}),
+                                   (img, {'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280}),
                                    (img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
-                                   (img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
-                                   (img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
+                                   #(img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
+                                   #(img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
                                     ]
             t0 = time.time()
             if self.parallel == 'process':
@@ -183,9 +183,9 @@ class ProcessImage():
 
         self.heat = add_heat(self.heat, box_list)
 
-        self.heat = apply_threshold(self.heat, 2)
+        self.heat = apply_threshold(self.heat, 3)
         
-        self.heat = np.clip(self.heat, 0, 3)
+        self.heat = np.clip(self.heat, 0, 5)
 
         heatmap_img = np.dstack((self.heat, np.zeros_like(self.heat), np.zeros_like(self.heat)))
 
