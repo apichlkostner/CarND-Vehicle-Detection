@@ -17,6 +17,7 @@ from HelperFunctions import *
 from FindCars import *
 from Segmentation import *
 from Model import *
+from FeatureExtract import FeatureExtractor
 
 from sklearn.model_selection import train_test_split
 import concurrent.futures
@@ -72,7 +73,7 @@ def single_img_features(img, color_space='RGB', spatial_size=(32, 32),
 
 # Define a function you will pass an image 
 # and the list of windows to be searched (output of slide_windows())
-def search_windows(img, windows, clf, scaler, color_space='RGB', 
+def search_windows2(img, windows, clf, scaler, color_space='RGB', 
                     spatial_size=(32, 32), hist_bins=32, 
                     hist_range=(0, 1.), orient=9, 
                     pix_per_cell=8, cell_per_block=2, 
@@ -106,10 +107,37 @@ def search_windows(img, windows, clf, scaler, color_space='RGB',
     #8) Return windows for positive detections
     return on_windows
 
+def search_windows(img, windows, conf, feat_extr):
+    scaler = conf['x_scaler']
+    clf = conf['model']
+    #1) Create an empty list to receive positive detection windows
+    on_windows = []
+    #2) Iterate over all windows in the list
+    for window in windows:
+        #3) Extract the test window from original image
+        test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
+        #4) Extract features for that window using single_img_features()
+        features = feat_extr.calc_features(test_img)
+        #5) Scale extracted features to be fed to classifier        
+        #print('Feature 2 min={}  max={}'.format(features.min(), features.max()))
+        test_features = scaler.transform(np.array(features).reshape(1, -1))
+
+        if True:
+            proba = clf.predict_proba(test_features)
+            prediction = 1 * (proba[0, 1] > 0.9)
+        else:
+            prediction = clf.predict(test_features)
+
+        if prediction == 1:
+            on_windows.append(window)
+
+    #8) Return windows for positive detections
+    return on_windows
+
 class ProcessImage():
     def __init__(self):
-        self.model_config = {'color_space': 'YCrCb', 'orient': 9,
-                             'pix_per_cell': 16, 'cell_per_block': 4,
+        self.model_config = {'color_space': cv2.COLOR_RGB2YCrCb, 'orient': 9,
+                             'pix_per_cell': 16, 'cell_per_block': 2,
                              'hog_channel': 'ALL', 'spatial_size': (16, 16),
                              'hist_bins': 16, 'spatial_feat': True,
                              'hist_feat': True, 'hog_feat': True, 'probability': True}
@@ -129,6 +157,7 @@ class ProcessImage():
         self.model_config = model_map['model_config']
         self.model_config['model'] = model_map['model']
         self.model_config['x_scaler'] = model_map['x_scaler']
+        self.feat_extr = FeatureExtractor(self.model_config)
         
         self.find_cars = FindCars()
         self.find_cars.fit(self.model_config)
@@ -144,21 +173,23 @@ class ProcessImage():
         #plt.show()
         #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         #cv2.imwrite('test.jpg', bgr)
+        img_search = cv2.cvtColor(img, self.model_config['color_space'])
+
         if self.heat is None:
             self.heat = np.zeros_like(img[:,:,0]).astype(np.uint8)
 
         draw_image = np.copy(img)
         
-        if False:
-            windows = slide_window(img, x_start_stop=[None, None], y_start_stop=self.y_start_stop, 
-                                xy_window=(96, 96), xy_overlap=(0.5, 0.5))
+        if True:
+            windows = slide_window(img_search, x_start_stop=[720, 1280], y_start_stop=[400, 600], 
+                                xy_window=(64, 64), xy_overlap=(0.75, 0.75))
 
-            box_list = search_windows(img, windows, self.clf, self.x_scaler, color_space=self.model_config['color_space'], 
-                                    spatial_size=self.spatial_size, hist_bins=self.model_config['hist_bins'], 
-                                    orient=self.model_config['orient'], pix_per_cell=self.model_config['pix_per_cell'], 
-                                    cell_per_block=self.model_config['cell_per_block'], 
-                                    hog_channel=self.model_config['hog_channel'], spatial_feat=self.model_config['spatial_feat'], 
-                                    hist_feat=self.model_config['hist_feat'], hog_feat=self.model_config['hog_feat'])
+            box_list = search_windows(img_search, windows, self.model_config, self.feat_extr)
+
+            windows = slide_window(img_search, x_start_stop=[720, 1280], y_start_stop=[400, 550], 
+                                xy_window=(45, 45), xy_overlap=(0.75, 0.75))
+
+            box_list.extend(search_windows(img_search, windows, self.model_config, self.feat_extr))
         else:
             box_list = []
             sliding_window_desc = [#(img, {'scale': 0.5, 'y_top': 400, 'y_bottom': 500, 'x_left': 640, 'x_right': 1280}),

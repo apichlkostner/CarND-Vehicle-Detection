@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+from skimage.feature import hog
 
 class FeatureExtractor():
     def __init__(self, config):
@@ -13,21 +14,24 @@ class FeatureExtractor():
             blockSize = (winSize[0] // self.conf['cell_per_block'],
                             winSize[1] // self.conf['cell_per_block'])
             blockStride = (blockSize[0] // 2, blockSize[1] // 2)
-            cellSize = (self.conf['pix_per_cell'], self.conf['pix_per_cell'])
-            nbins = self.conf['orient']
-            derivAperture = 1
-            winSigma = -1.
-            histogramNormType = 0
-            L2HysThreshold = 0.2
-            gammaCorrection = 1
-            nlevels = 64
-            useSignedGradients = True
-
-            hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize,
-                        nbins, derivAperture, winSigma, histogramNormType, 
-                        L2HysThreshold, gammaCorrection, nlevels, useSignedGradients)
+            pix_per_cell = (self.conf['pix_per_cell'], self.conf['pix_per_cell'])
             
-            features = hog.compute(img)
+
+            USE_OPENCV = True
+            if USE_OPENCV:
+                hog_descr = cv2.HOGDescriptor(_winSize=winSize, _blockSize=blockSize, _blockStride=blockStride,
+                _cellSize=pix_per_cell, _nbins=self.conf['orient'], _signedGradient=True)
+                features = hog_descr.compute(img[:,:,channel])
+            else:
+                pix_per_cell = self.conf['pix_per_cell']
+                cell_per_block = self.conf['cell_per_block']
+
+                features = hog(img[:,:,channel], orientations=self.conf['orient'], 
+                        pixels_per_cell=(pix_per_cell, pix_per_cell),
+                        cells_per_block=(cell_per_block, cell_per_block), 
+                        block_norm= 'L2-Hys',
+                        transform_sqrt=False, 
+                        visualise=False, feature_vector=True)
             
             hog_features.append(features)
 
