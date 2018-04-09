@@ -17,10 +17,10 @@ class FeatureExtractor():
             pix_per_cell = (self.conf['pix_per_cell'], self.conf['pix_per_cell'])
             
 
-            USE_OPENCV = True
+            USE_OPENCV = False
             if USE_OPENCV:
                 hog_descr = cv2.HOGDescriptor(_winSize=winSize, _blockSize=blockSize, _blockStride=blockStride,
-                _cellSize=pix_per_cell, _nbins=self.conf['orient'], _signedGradient=True)
+                _cellSize=pix_per_cell, _nbins=self.conf['orient'], _signedGradient=False)
                 features = hog_descr.compute(img[:,:,channel])
             else:
                 pix_per_cell = self.conf['pix_per_cell']

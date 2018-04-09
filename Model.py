@@ -111,7 +111,7 @@ class Model():
         print('Feature vector length:', len(x_train[0]))
         
         print('Searching for best parameters...')
-        C_params = [0.01, 0.1, 1., 10.]
+        C_params = [0.0001, 0.001, 0.01, 0.1]
         models = {}
         score_max = 0.
         params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,
@@ -135,6 +135,25 @@ class Model():
                     clf = result[0]
         t3 = time.time()
         print('Time for searching parameter: {:.1f}'.format(t3 - t2))
+
+        # show wrong classified samples
+        if False:
+            pos_cnt = 0
+            feat_extr = FeatureExtractor(model_config)
+            for f in train_data['car']:
+                img = cv2.imread(f)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                if img.shape[0] == 64 and img.shape[1] == 64:
+                    img_proc = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
+                    features = feat_extr.calc_features(img_proc)
+                    features = x_scaler.transform(np.hstack(features).reshape(1, -1))
+
+                    if clf.predict(features) != 1:
+                        plt.imshow(img)
+                        plt.show()
+                    else:
+                        pos_cnt += 1
+            print("Poscnt = {}".format(pos_cnt))
 
         with pickle_file.open(mode='wb') as f:
             model_map = {'model': clf, 'x_scaler': x_scaler, 'model_config': model_config}

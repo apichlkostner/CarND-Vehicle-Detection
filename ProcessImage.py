@@ -176,18 +176,23 @@ class ProcessImage():
         img_search = cv2.cvtColor(img, self.model_config['color_space'])
 
         if self.heat is None:
-            self.heat = np.zeros_like(img[:,:,0]).astype(np.uint8)
+            self.heat = np.zeros_like(img[:,:,0]).astype(np.float)
 
         draw_image = np.copy(img)
         
         if True:
-            windows = slide_window(img_search, x_start_stop=[720, 1280], y_start_stop=[400, 600], 
-                                xy_window=(64, 64), xy_overlap=(0.75, 0.75))
+            windows = slide_window(img_search, x_start_stop=[800, 1280], y_start_stop=[400, 500], 
+                                xy_window=(64, 64), xy_overlap=(0.5, 0.5))
 
             box_list = search_windows(img_search, windows, self.model_config, self.feat_extr)
 
-            windows = slide_window(img_search, x_start_stop=[720, 1280], y_start_stop=[400, 550], 
-                                xy_window=(45, 45), xy_overlap=(0.75, 0.75))
+            windows = slide_window(img_search, x_start_stop=[800, 1280], y_start_stop=[400, 550], 
+                                xy_window=(96, 96), xy_overlap=(0.5, 0.5))
+
+            box_list.extend(search_windows(img_search, windows, self.model_config, self.feat_extr))
+
+            windows = slide_window(img_search, x_start_stop=[1050, 1280], y_start_stop=[400, 550], 
+                                xy_window=(128, 128), xy_overlap=(0.75, 0.75))
 
             box_list.extend(search_windows(img_search, windows, self.model_config, self.feat_extr))
         else:
@@ -212,15 +217,29 @@ class ProcessImage():
             t1 = time.time()
             print('Time for alls scales: {:.3f}'.format(t1 - t0))
 
-        self.heat = add_heat(self.heat, box_list)
+        heat = np.zeros_like(img[:,:,0]).astype(np.float)
+        heat = add_heat(heat, box_list)
 
-        self.heat = apply_threshold(self.heat, 3)
+        #print('Min {} Max {}'.format(heat.min(), heat.max()))
+        heat = np.clip(heat, 0, 3)
+        #heat = apply_threshold(heat, 2)
+
+        #print('Min {} Max {}'.format(heat.min(), heat.max()))
+
+        alpha = 0.8
+        #self.heat = alpha * self.heat + (1. -alpha) * heat
+        self.heat = alpha * self.heat + heat
+        self.heat = np.clip(self.heat, 0, 6)
+        #print('Min {} Max {}'.format(self.heat.min(), self.heat.max()))
         
-        self.heat = np.clip(self.heat, 0, 5)
+        heat = self.heat.copy()
+        heat = apply_threshold(heat, 5)
 
-        heatmap_img = np.dstack((self.heat, np.zeros_like(self.heat), np.zeros_like(self.heat)))
+        #print('Min {} Max {}'.format(heat.min(), heat.max()))
 
-        draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img, 1., 0)
+        heatmap_img = np.dstack((heat, np.zeros_like(heat), np.zeros_like(heat)))
+
+        draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img.astype(np.uint8), 1., 0)
 
         #hog_image = np.zeros_like(draw_image)
         #hog_image[self.y_start_stop[0]:self.y_start_stop[1], self.x_start_stop[0]:self.x_start_stop[1], 2] = hog_img
@@ -231,7 +250,7 @@ class ProcessImage():
         
 
         # Find final boxes from heatmap using label function
-        labels = label(self.heat)
+        labels = label(heat)
 
         window_img, boxes = draw_labeled_bboxes(draw_image, labels)
 
