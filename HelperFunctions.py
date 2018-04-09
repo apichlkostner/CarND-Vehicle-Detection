@@ -71,6 +71,8 @@ def extract_features(imgs, confmap):
 
         # Read in each one by one
         image = cv2.imread(file)
+        # Must be RGB like the images from the video
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         if image.shape != (64, 64, 3):
             # ignore files with wrong shape
@@ -157,7 +159,7 @@ def add_heat(heatmap, bbox_list):
     #print('Heatmap reduce {}  max = {}'.format((heatmap >= 1).sum(), heatmap.max()))
     #num = heatmap[:, 1230:]
     #print('Right part min {}  max {}  mean {}'.format(num.min(), num.max(), num.mean()))
-    heatmap[heatmap >= 1] -= 1
+    #heatmap[heatmap >= 1] -= 1
     #print('Heatmap reduce after {}  max = {}'.format((heatmap >= 1).sum(), heatmap.max()))
     #print('Right part after min {}  max {}  mean {}'.format(num.min(), num.max(), num.mean()))
 
