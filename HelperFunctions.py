@@ -1,6 +1,7 @@
 import matplotlib.image as mpimg
 import numpy as np
 import cv2
+import time
 from skimage.feature import hog
 from cv2 import HOGDescriptor
 from FeatureExtract import FeatureExtractor
@@ -96,17 +97,8 @@ def extract_features(imgs, confmap):
 # start and stop positions in both x and y, 
 # window size (x and y dimensions),  
 # and overlap fraction (for both x and y)
-def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None], 
+def slide_window(x_start_stop=[None, None], y_start_stop=[None, None], 
                     xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
-    # If x and/or y start/stop positions not defined, set to image size
-    if x_start_stop[0] == None:
-        x_start_stop[0] = 0
-    if x_start_stop[1] == None:
-        x_start_stop[1] = img.shape[1]
-    if y_start_stop[0] == None:
-        y_start_stop[0] = 0
-    if y_start_stop[1] == None:
-        y_start_stop[1] = img.shape[0]
     # Compute the span of the region to be searched    
     xspan = x_start_stop[1] - x_start_stop[0]
     yspan = y_start_stop[1] - y_start_stop[0]
@@ -189,3 +181,45 @@ def draw_labeled_bboxes(img, labels):
         boxes.append(bbox)
     # Return the image
     return img, boxes
+
+def search_windows_slide(img, windows, feat_extr, x_scaler, model):
+    #1) Create an empty list to receive positive detection windows
+    on_windows = []
+    #2) Iterate over all windows in the list
+    for window in windows:
+        #3) Extract the test window from original image
+        test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
+        #4) Extract features for that window using single_img_features()
+        features = feat_extr.calc_features(test_img)
+        #5) Scale extracted features to be fed to classifier        
+        #print('Feature 2 min={}  max={}'.format(features.min(), features.max()))
+        test_features = x_scaler.transform(np.array(features).reshape(1, -1))
+
+        if True:
+            proba = model.predict_proba(test_features)
+            prediction = 1 * (proba[0, 1] > 0.9)
+        else:
+            prediction = model.predict(test_features)
+
+        if prediction == 1:
+            on_windows.append(window)
+
+    #8) Return windows for positive detections
+    return on_windows
+
+def find_cars_sliding(args):
+    '''
+
+    '''
+    t0 = time.time()
+
+    (img, windows, conf, feat_extr) = args
+    x_scaler = conf['x_scaler']
+    model = conf['model']
+
+    box_list = search_windows_slide(img, windows, feat_extr, x_scaler, model)
+
+    t1 = time.time()
+    print('Time for boxes: {:.3f}'.format(t1-t0))
+
+    return box_list

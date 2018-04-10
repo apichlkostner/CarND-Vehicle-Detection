@@ -41,6 +41,7 @@ class FindCars():   #threading.Thread):
     def fit(self, swd):
         self.clf = swd['model']
         self.x_scaler = swd['x_scaler']
+        self.feat_extr = swd['feat_extr']
         self.frame_nr = 0
         self.debug_folder = 'debug/project_video/'
         self.use_spatial_features = swd['spatial_feat']
@@ -53,8 +54,7 @@ class FindCars():   #threading.Thread):
         self.hist_bins = swd['hist_bins']
         self.orient = swd['orient']
 
-    def run(self):
-        self.box, self.himg = self.find_cars((self.img, self.swd))
+
 
     # Define a single function that can extract features using hog sub-sampling and make predictions
     def find_cars(self, args):
@@ -68,17 +68,17 @@ class FindCars():   #threading.Thread):
         img_tosearch = img[ystart:ystop, xstart:, :]
 
         # color transformation
-        ctrans_tosearch = cv2.cvtColor(img_tosearch, self.colorTransform)
+        #ctrans_tosearch = cv2.cvtColor(img_tosearch, self.colorTransform)
 
         # resize image if scale != 1
         if scale != 1:
-            imshape = ctrans_tosearch.shape
-            ctrans_tosearch = cv2.resize(ctrans_tosearch, (np.int(imshape[1] / scale),
+            imshape = img_tosearch.shape
+            img_tosearch = cv2.resize(img_tosearch, (np.int(imshape[1] / scale),
                                                            np.int(imshape[0] / scale)))
             
-        ch1 = ctrans_tosearch[:, :, 0]
-        ch2 = ctrans_tosearch[:, :, 1]
-        ch3 = ctrans_tosearch[:, :, 2]
+        ch1 = img_tosearch[:, :, 0]
+        ch2 = img_tosearch[:, :, 1]
+        ch3 = img_tosearch[:, :, 2]
 
         # Define blocks and steps as above
         nxblocks = (ch1.shape[1] // self.pix_per_cell) - self.cell_per_block + 1
@@ -129,7 +129,7 @@ class FindCars():   #threading.Thread):
                 features = []
 
                 # Extract the image patch
-                subimg = ctrans_tosearch[ytop:ytop+window, xleft:xleft+window]
+                subimg = img_tosearch[ytop:ytop+window, xleft:xleft+window]
 
                 if (subimg.shape[0] != 64) or (subimg.shape[1] != 64):
                     print("Error: shape = {}".format(subimg.shape))

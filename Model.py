@@ -111,7 +111,7 @@ class Model():
         print('Feature vector length:', len(x_train[0]))
         
         print('Searching for best parameters...')
-        C_params = [0.0001, 0.001, 0.01, 0.1]
+        C_params = [0.0005, 0.001, 0.002, 0.4]
         models = {}
         score_max = 0.
         params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,

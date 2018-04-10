@@ -115,11 +115,11 @@ def search_windows(img, windows, conf, feat_extr):
     #2) Iterate over all windows in the list
     for window in windows:
         #3) Extract the test window from original image
-        test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
+        if img.shape[0] != 64:
+            test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
         #4) Extract features for that window using single_img_features()
         features = feat_extr.calc_features(test_img)
-        #5) Scale extracted features to be fed to classifier        
-        #print('Feature 2 min={}  max={}'.format(features.min(), features.max()))
+        #5) Scale extracted features to be fed to classifier
         test_features = scaler.transform(np.array(features).reshape(1, -1))
 
         if True:
@@ -148,7 +148,8 @@ class ProcessImage():
         self.cnt = 0
         self.DEBUG = True
         self.frame_nr = 0
-        self.parallel = 'process'
+        self.use_sliding_window = True
+        self.parallel = 'serial' #'process'
 
     def fit(self):
         model = Model()
@@ -158,9 +159,21 @@ class ProcessImage():
         self.model_config['model'] = model_map['model']
         self.model_config['x_scaler'] = model_map['x_scaler']
         self.feat_extr = FeatureExtractor(self.model_config)
+        self.model_config['feat_extr'] = self.feat_extr
         
         self.find_cars = FindCars()
         self.find_cars.fit(self.model_config)
+
+        # building lists with windows for sliding window algorithm
+        # needs 1ms
+        self.windows = []
+        self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+                                    xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
+        self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+                                    xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
+        # self.windows.append(slide_window(x_start_stop=(1050, 1280), y_start_stop=(550, 700), 
+        #                             xy_window=(128, 128), xy_overlap=(0.75, 0.75)))
+        
 
     def process_image(self, img):
         if self.DEBUG:
@@ -169,36 +182,44 @@ class ProcessImage():
             if self.frame_nr < 0:
                 self.frame_nr += 1
                 return img
-        #plt.imshow(img)
-        #plt.show()
-        #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        #cv2.imwrite('test.jpg', bgr)
-        img_search = cv2.cvtColor(img, self.model_config['color_space'])
+
+        # save original image in RGB for drawing results
+        draw_image = np.copy(img)
+        
+        # transform to selected colorspace of model
+        img = cv2.cvtColor(img, self.model_config['color_space'])
 
         if self.heat is None:
             self.heat = np.zeros_like(img[:,:,0]).astype(np.float)
-
-        draw_image = np.copy(img)
         
-        if True:
-            windows = slide_window(img_search, x_start_stop=[800, 1280], y_start_stop=[400, 500], 
-                                xy_window=(64, 64), xy_overlap=(0.5, 0.5))
-
-            box_list = search_windows(img_search, windows, self.model_config, self.feat_extr)
-
-            windows = slide_window(img_search, x_start_stop=[800, 1280], y_start_stop=[400, 550], 
-                                xy_window=(96, 96), xy_overlap=(0.5, 0.5))
-
-            box_list.extend(search_windows(img_search, windows, self.model_config, self.feat_extr))
-
-            windows = slide_window(img_search, x_start_stop=[1050, 1280], y_start_stop=[400, 550], 
-                                xy_window=(128, 128), xy_overlap=(0.75, 0.75))
-
-            box_list.extend(search_windows(img_search, windows, self.model_config, self.feat_extr))
+        if self.use_sliding_window:
+            if self.parallel == 'process':
+                #t0 = time.time()
+                box_list = []
+                sliding_window_desc = [
+                    (img, self.windows[0], self.model_config, self.feat_extr),
+                    (img, self.windows[1], self.model_config, self.feat_extr),
+                    (img, self.windows[2], self.model_config, self.feat_extr)]
+                
+                if self.parallel == 'process':
+                    with concurrent.futures.ProcessPoolExecutor() as executor:
+                        res = executor.map(find_cars_sliding, sliding_window_desc)
+                        for r in res:
+                            print('Adding {} boxes'.format(len(r)))
+                            box_list.extend(r)
+                #t1 = time.time()
+                #print('Time for alls scales (parallel): {:.3f}'.format(t1 - t0))                
+            else:
+                #t0 = time.time()
+                box_list = []
+                for windows in self.windows:
+                    box_list.extend(search_windows(img, windows, self.model_config, self.feat_extr))
+                
+                #t1 = time.time()
+                #print('Time for alls scales (serial): {:.3f}'.format(t1 - t0))
         else:
             box_list = []
-            sliding_window_desc = [#(img, {'scale': 0.5, 'y_top': 400, 'y_bottom': 500, 'x_left': 640, 'x_right': 1280}),
-                                   (img, {'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280}),
+            sliding_window_desc = [(img, {'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280}),
                                    (img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
                                    #(img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
                                    #(img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
@@ -239,8 +260,6 @@ class ProcessImage():
 
         heatmap_img = np.dstack((heat, np.zeros_like(heat), np.zeros_like(heat)))
 
-        draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img.astype(np.uint8), 1., 0)
-
         #hog_image = np.zeros_like(draw_image)
         #hog_image[self.y_start_stop[0]:self.y_start_stop[1], self.x_start_stop[0]:self.x_start_stop[1], 2] = hog_img
         #hog_image[self.y_start_stop[0]:self.y_start_stop[1], self.x_start_stop[0]:self.x_start_stop[1], 1] = hog_img
@@ -259,7 +278,10 @@ class ProcessImage():
             ff = FloodFill()
             window_img = ff.fill(window_img, boxes)
         
-        window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
+        # debug: show single boxes and heatmap
+        if False:
+            window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
+            draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img.astype(np.uint8), 1., 0)
 
 
         if self.DEBUG:
