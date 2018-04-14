@@ -1,4 +1,90 @@
 # Early draft
+
+
+
+# Start
+
+## Sources for train and validation data
+### GTI
+
+### KITTI
+
+### Udacity datset
+ To extract the images from the udacity dataset the csv file is read as a pandas dataframe and for every row the corresponding image is extracted.
+
+Only some of the car images are taken from this data set since many of the images are cars from the front side and this project needs to detect only cars from behind.
+
+The non car images were also not helpfull since they contain only objects which don't have to be detected here (traffic lights).
+
+![Udacity dataset](output_images/udacity_dataset.jpg)
+
+### Video
+The images from the video are splitted to smaller samples which are classified by hand to get more non-car samples from the target images (hard negative mining).
+
+## Validation data
+Most of the vehicle images used here are from video sequences so many images are very similar to other images. So a random train/test split is not the best way to find optimal model parameters.
+
+Therefore the split was done manually in this project. The images from the GTI dataset are best sorted compared to the other data sets. So it was possible to extract complete image sequences from the GTI dataset and use them as a validation set.
+
+## Parallelization
+To improve the processing speed it is helpful to split the algorithms in pieces which can be processed on different cores.
+
+For the previous projects with neural networks it was possible to use the multi-threading libray of Python to do images preprocessing and augmentation in parallel on the CPU while the GPU was calculating backpropagation.
+
+The problem of the threading library is the "Global Interpreter Lock" (GIL) which ensures that the python threads don't execute code in parallel. When one thread is waiting fo IO (for example the GPU or file access) the other threads can execute. In the current project all calculations are done on the CPU and most time is used for calculating and not for IO.
+
+To overcome this problem and do some real parallelization the multi-processing library from the concurrent.futures module is used here. With this library it is possible to run python code in different processes and merge the result.
+
+Multiprocessing was used to train SVM with different parameter in parallel and use the best model parameters after testing with the test set.
+
+
+![VehicleDetection](output_images/frame_0946.jpg)
+
+
+
+Files:
+
+|File             | Functionality |
+|:---------------:|:-------------:|
+|RenderVideo.py   | Reads video and runs the detection pipeline |
+|ProcessImage.py  | Pipeline for vehicle detection |
+|ProcessImageLane.py | Pipeline for lane detection |
+|Model.py         | Encapsulates the SVM including parameters, training, save and load |
+|FeatureExtrac.py | Encapsulates the feature extraction using HOG, color histogram and spatial histogram, including parameters |
+|HelperFunctions.py | Helper functions like drawing boxes or generating box sets |
+|FindCars.py      | Older search algorithm |
+|CameraCalibration.py | 
+|ExtractImages.py | Extract train images from video or from Udacity dataset |
+|DataGeneration.py | Generates training data from images |
+|Segmentation.py | Flood fill for image segmentation |
+
+
+
+
+GTI: Taken parts for test set since partly ordered
+Kitti: many similar images, completely random, removed half of the set
+Udacity: extracted with ExtractImages.py, taken manually images from back
+Video: taken good examples from video
+
+Done:
+- Parallelization with threads (GIL) and processes
+
+Tried:
+- Color segmentation with flood fill on detected cars
+- Vehicle object with position and velocity
+
+
+References:
+
+* https://wiki.python.org/moin/GlobalInterpreterLock
+* http://www.cvlibs.net/datasets/kitti/
+* http://www.gti.ssr.upm.es/data/Vehicle_database.html
+
+
+
+
+
+
 ## Template
 ### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
 
@@ -106,40 +192,3 @@ Here's an example result showing the heatmap from a series of frames of video, t
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
 Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
-
-
-
-![calibration](output_images/frame_0946.jpg)
-
-
-
-Files:
-
-|File             | Functionality |
-|:---------------:|:-------------:|
-|RenderVideo.py   | Reads video and runs the detection pipeline |
-|ProcessImage.py  | Pipeline for vehicle detection |
-|ProcessImageLane.py | Pipeline for lane detection |
-|Model.py         | Encapsulates the SVM including parameters, training, save and load |
-|FeatureExtrac.py | Encapsulates the feature extraction using HOG, color histogram and spatial histogram, including parameters |
-|HelperFunctions.py | Helper functions like drawing boxes or generating box sets |
-|FindCars.py      | Older search algorithm |
-|CameraCalibration.py | 
-|ExtractImages.py | Extract train images from video or from Udacity dataset |
-|DataGeneration.py | Generates training data from images |
-|Segmentation.py | Flood fill for image segmentation |
-
-
-
-
-GTI: Taken parts for test set since partly ordered
-Kitti: many similar images, completely random, removed half of the set
-Udacity: extracted with ExtractImages.py, taken manually images from back
-Video: taken good examples from video
-
-Done:
-- Parallelization with threads (GIL) and processes
-
-Tried:
-- Color segmentation with flood fill on detected cars
-- Vehicle object with position and velocity
