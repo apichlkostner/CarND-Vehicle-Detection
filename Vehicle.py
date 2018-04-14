@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import time
 from HelperFunctions import *
+from FeatureExtract import FeatureExtractor
 
 class Vehicle():
     def __init__(self):
@@ -13,29 +14,30 @@ class Vehicle():
                              'pix_per_cell': 16, 'cell_per_block': 4,
                              'hog_channel': 'ALL', 'spatial_size': (16, 16),
                              'hist_bins': 16, 'spatial_feat': True,
-                             'hist_feat': True, 'hog_feat': True, 'probability': True}    
+                             'hist_feat': True, 'hog_feat': True, 'probability': True}
+
+        self.feat_extr = FeatureExtractor(self.model_config) 
 
     def fit_boxes(self, boxes):
         x = 5
         #for box in boxes:
         #    if box[0][0] >
 
-    def init(self, pos, velocity, bbox):
+    def init(self, pos, velocity, bbox, feat_extr=None):
         self.pos = pos
         self.velocity = velocity
         self.bbox = bbox
 
+        if feat_extr is not None:
+            self.feat_extr = feat_extr
+
     def update(self, img):
         self.pos += self.velocity
-
-        spatial_feat = True
-        hist_feat = True
-        hog_feat = True
 
         p1 = self.bbox[0]
         p2 = self.bbox[1]
 
-        file_features = []
+        features = []
         cnt = 0
 
         for y in range(p1[0], p2[0], 16):
@@ -44,56 +46,9 @@ class Vehicle():
 
                 cnt += 1
 
-                # spatial features
-                if spatial_feat:
-                    spatial_features = bin_spatial(feature_image, size=self.model_config['spatial_size'])
-                    file_features.append(spatial_features)
+                features = self.feat_extr.calc_features(feature_image)
 
-                # color histogram features
-                if hist_feat:
-                    # Apply color_hist()
-                    hist_features = color_hist(feature_image, nbins=self.model_config['hist_bins'])
-                    file_features.append(hist_features)
-
-                # hog features
-                if hog_feat:
-                # Call get_hog_features() with vis=False, feature_vec=True
-                    if self.model_config['hog_channel'] == 'ALL':
-                        hog_features = []
-                        for channel in range(feature_image.shape[2]):
-                            #hog_features.append(get_hog_features(feature_image[:,:,channel], 
-                            #                    self.model_config['orient'], self.model_config['pix_per_cell']
-                            #                    , self.model_config['cell_per_block'], vis=False, feature_vec=True))
-                            winSize = (feature_image.shape[0], feature_image.shape[1])
-                            blockSize = (winSize[0] // self.model_config['cell_per_block'],
-                                         winSize[1] // self.model_config['cell_per_block'])
-                            blockStride = (blockSize[0] // 2, blockSize[1] // 2)
-                            cellSize = (self.model_config['pix_per_cell'], self.model_config['pix_per_cell'])
-                            nbins = self.model_config['orient']
-                            derivAperture = 1
-                            winSigma = -1.
-                            histogramNormType = 0
-                            L2HysThreshold = 0.2
-                            gammaCorrection = 1
-                            nlevels = 64
-                            useSignedGradients = True
-                            #hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize,
-                            #            nbins, derivAperture, winSigma, histogramNormType, 
-                            #            L2HysThreshold, gammaCorrection, nlevels, useSignedGradients)
-                            hog = cv2.HOGDescriptor(winSize, blockSize, blockStride, cellSize,
-                                        nbins, derivAperture, winSigma, histogramNormType, 
-                                        L2HysThreshold, gammaCorrection, nlevels)
-                            descriptor = hog.compute(feature_image)
-                            #print('Descriptor {}'.format(descriptor.shape))
-                            hog_features.append(descriptor)
-
-                        hog_features = np.ravel(hog_features)        
-                    else:
-                        hog_features = get_hog_features(feature_image[:,:,self.model_config['hog_channel']],
-                                    self.model_config['orient'], self.model_config['pix_per_cell'],
-                                    self.model_config['cell_per_block'], vis=False, feature_vec=True)
-                    # Append the new feature vector to the features list
-                    file_features.append(hog_features)
+                
 
         print("Number of iterations = {}".format(cnt))
         #print('Feature vector shape = {}'.format(file_features))
