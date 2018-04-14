@@ -92,8 +92,26 @@ def extract_features(imgs, confmap):
 
     # Return list of feature vectors
     return feature_vectors
-    
-# Define a function that takes an image,
+
+
+
+def slide_window_triangle(x_start_stop, y_start_stop, xy_window, xy_overlap):
+    x_stop = x_start_stop[1] - xy_window[0]
+    y_stop = y_start_stop[1] - xy_window[1]
+    delta_x = x_start_stop[1] - x_start_stop[0]
+    delta_y = y_start_stop[1] - y_start_stop[0]
+    alpha = (delta_x-380) / delta_y
+    delta_step_x = int(xy_window[0] * (1 - xy_overlap[0]))
+    delta_step_y = int(xy_window[1] * (1 - xy_overlap[1]))
+
+    windows = []
+    for y in range(y_start_stop[0], y_stop, delta_step_y):
+        trix = int(alpha * (y - y_start_stop[0]))
+        for x in range(x_start_stop[0] + trix, x_stop, delta_step_x):
+            windows.append(((x, y), (x + xy_window[0], y + xy_window[1])))
+
+    return windows
+
 # start and stop positions in both x and y, 
 # window size (x and y dimensions),  
 # and overlap fraction (for both x and y)
@@ -223,3 +241,10 @@ def find_cars_sliding(args):
     print('Time for boxes: {:.3f}'.format(t1-t0))
 
     return box_list
+
+def main():
+    a = slide_window_triangle((0, 100), (0, 100), (30, 30), (0.5, 0.5))
+    print(a)
+
+if __name__ == "__main__":
+    main()

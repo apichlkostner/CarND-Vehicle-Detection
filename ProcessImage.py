@@ -151,10 +151,11 @@ class ProcessImage():
         self.use_sliding_window = True
         self.parallel = 'serial' #'process'
 
-    def fit(self):
+    def fit(self, laneFit):
         model = Model()
         model_map = model.fit(self.model_config)
 
+        self.laneFit = laneFit
         self.model_config = model_map['model_config']
         self.model_config['model'] = model_map['model']
         self.model_config['x_scaler'] = model_map['x_scaler']
@@ -167,25 +168,33 @@ class ProcessImage():
         # building lists with windows for sliding window algorithm
         # needs 1ms
         self.windows = []
-        self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
-                                    xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-        self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
-                                    xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
-        # self.windows.append(slide_window(x_start_stop=(1050, 1280), y_start_stop=(550, 700), 
-        #                             xy_window=(128, 128), xy_overlap=(0.75, 0.75)))
-        
+        if True:
+            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
+                                        xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
+            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
+                                        xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
+        else:
+            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+                                       xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
+            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+             
 
     def process_image(self, img):
+        # save original image in RGB for drawing results        
+        img_orig = img.copy()
+
         if self.DEBUG:
             folder = 'debug/project_video/'
             #folder = 'debug/test_video/'
-            if self.frame_nr < 0:
-                self.frame_nr += 1
-                return img
 
-        # save original image in RGB for drawing results
-        draw_image = np.copy(img)
+        # Quick merge of lane detecion
+        if True:
+            lane_image = self.laneFit.process_image(img_orig)
+            #window_img = cv2.addWeighted(window_img, 1., lane_image, 1., 0)
+            img = lane_image.copy()
         
+        draw_image = np.copy(img)
+
         # transform to selected colorspace of model
         img = cv2.cvtColor(img, self.model_config['color_space'])
 
@@ -194,7 +203,6 @@ class ProcessImage():
         
         if self.use_sliding_window:
             if self.parallel == 'process':
-                #t0 = time.time()
                 box_list = []
                 sliding_window_desc = [
                     (img, self.windows[0], self.model_config, self.feat_extr),
@@ -207,22 +215,15 @@ class ProcessImage():
                         for r in res:
                             print('Adding {} boxes'.format(len(r)))
                             box_list.extend(r)
-                #t1 = time.time()
-                #print('Time for alls scales (parallel): {:.3f}'.format(t1 - t0))                
             else:
-                #t0 = time.time()
                 box_list = []
                 for windows in self.windows:
                     box_list.extend(search_windows(img, windows, self.model_config, self.feat_extr))
-                
-                #t1 = time.time()
-                #print('Time for alls scales (serial): {:.3f}'.format(t1 - t0))
         else:
             box_list = []
-            sliding_window_desc = [(img, {'scale': 0.7, 'y_top': 400, 'y_bottom': 550, 'x_left': 640, 'x_right': 1280}),
-                                   (img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
-                                   #(img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
-                                   #(img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
+            sliding_window_desc = [(img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
+                                   (img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
+                                   (img, {'scale': 2.0, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
                                     ]
             t0 = time.time()
             if self.parallel == 'process':
@@ -240,33 +241,17 @@ class ProcessImage():
 
         heat = np.zeros_like(img[:,:,0]).astype(np.float)
         heat = add_heat(heat, box_list)
-
-        #print('Min {} Max {}'.format(heat.min(), heat.max()))
         heat = np.clip(heat, 0, 3)
-        #heat = apply_threshold(heat, 2)
 
-        #print('Min {} Max {}'.format(heat.min(), heat.max()))
-
+        # Global heat map average
         alpha = 0.8
-        #self.heat = alpha * self.heat + (1. -alpha) * heat
         self.heat = alpha * self.heat + heat
         self.heat = np.clip(self.heat, 0, 6)
-        #print('Min {} Max {}'.format(self.heat.min(), self.heat.max()))
         
         heat = self.heat.copy()
         heat = apply_threshold(heat, 5)
 
-        #print('Min {} Max {}'.format(heat.min(), heat.max()))
-
         heatmap_img = np.dstack((heat, np.zeros_like(heat), np.zeros_like(heat)))
-
-        #hog_image = np.zeros_like(draw_image)
-        #hog_image[self.y_start_stop[0]:self.y_start_stop[1], self.x_start_stop[0]:self.x_start_stop[1], 2] = hog_img
-        #hog_image[self.y_start_stop[0]:self.y_start_stop[1], self.x_start_stop[0]:self.x_start_stop[1], 1] = hog_img
-        #hog_img = np.dstack((np.zeros_like(hog_img), np.zeros_like(hog_img), hog_img))
-        #hog_img = cv2.resize(hog_img, (draw_image.shape[1], draw_image.shape[0]))
-        #draw_image = cv2.addWeighted(draw_image, 0.1, hog_image, 1., 0)
-        
 
         # Find final boxes from heatmap using label function
         labels = label(heat)
@@ -283,11 +268,15 @@ class ProcessImage():
             window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
             draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img.astype(np.uint8), 1., 0)
 
+        # show heatmap small at top right of image
+        heatmap_small = cv2.resize(heatmap_img.astype(np.uint8), (0, 0), fx=0.15, fy=0.15).reshape((108, 192, 3)) * 255
+        offset_small = 26
+        offset_x_small = 600
+        window_img[offset_small:offset_small + 108, offset_x_small+484:offset_x_small+676, :] = heatmap_small
 
+        # save the single images for debugging
         if self.DEBUG:
-            #img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             window_img_bgr = cv2.cvtColor(window_img, cv2.COLOR_RGB2BGR)
-            #cv2.imwrite(folder + 'original/frame_{:04d}.jpg'.format(self.frame_nr), img_bgr)
             cv2.imwrite(folder + 'processed/frame_{:04d}.jpg'.format(self.frame_nr), window_img_bgr)
             self.frame_nr += 1
 
