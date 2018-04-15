@@ -19,19 +19,42 @@ The steps of this project are the following:
 * Bounding box estimation
 * Merge with the previous project "Lane Line Detection"
 
+## Output of the pipeline
+![VehicleDetection](output_images/frame_0946.jpg)
 
 # Features
+## Colorspace
+Images can be processed using different color spaces. The most common color space is RGB which composes color from three base colors red, green and blue. This colorspace is good to be shown on a screen which uses the same base colors.
+
+For feature detection the RGB colorspace is often not optimal. Better are color spaces which are based on a lumina signal and some others defining the color. Examples are HSV, HSL and YCrCb.
+
+The following feature examples are all based on the YCrCb color space, the HOG features are calculated from the Y component. However for the final feature descriptor HOG features are calculated from all three components.
+
+
 ## HOG
+HOG features of cars:
 ![HOG features car](output_images/hog_features_cars.jpg)
+
+HOG features of non-cars:
 ![HOG features noncar](output_images/hog_features_noncars.jpg)
 ## Color
+Color histograms of cars:
 ![Color features car](output_images/color_features_cars.jpg)
+
+Color histograms of non-cars:
 ![Color features noncar](output_images/color_features_noncars.jpg)
 
 ## Sources for train and validation data
 ### GTI
+Some samples from GTI data:
+
+![GTI dataset](output_images/GTI_dataset.jpg)
 
 ### KITTI
+Some samples from KITTI data:
+
+![KITTI dataset](output_images/KITTI_dataset.jpg)
+
 
 ### Udacity datset
  To extract the images from the udacity dataset the csv file is read as a pandas dataframe and for every row the corresponding image is extracted.
@@ -50,6 +73,19 @@ Most of the vehicle images used here are from video sequences so many images are
 
 Therefore the split was done manually in this project. The images from the GTI dataset are best sorted compared to the other data sets. So it was possible to extract complete image sequences from the GTI dataset and use them as a validation set.
 
+# Implementation
+
+## Lessons learned
+### Features calculated from wrong color space or quantization of pixels
+* use openCV functions to read images since they use the same quantization for all file formats
+* directly after reading the image convert to RGB colorspace which will be the colorspace of video images
+
+### Feature parameters don't match
+* Encapsulation of the feature extraction process, no different functions to calculate in different stages (feature extraction for classifier training, video processing)
+* Save and restore classifier with all parameters used for feature extraction and normalization. Save and restore done in feature extraction class itself.
+
+## Encapsulation
+
 ## Parallelization
 To improve the processing speed it is helpful to split the algorithms in pieces which can be processed on different cores.
 
@@ -62,11 +98,11 @@ To overcome this problem and do some real parallelization the multi-processing l
 Multiprocessing was used to train SVM with different parameter in parallel and use the best model parameters after testing with the test set.
 
 
-![VehicleDetection](output_images/frame_0946.jpg)
 
 
 
-Files:
+
+## Files
 
 |File             | Functionality |
 |:---------------:|:-------------:|
