@@ -1,8 +1,32 @@
-# Early draft
+# Draft
+
+# Summary
+
+The steps of this project are the following:
+
+* Feature extraction on a labeled training set of images
+  * HOG features
+  * Color histogram features
+  * Spatial features
+* Normalization of the feature vectors
+* Training of a Linear SVM classifier on the features
+* Finding the best feature and classifier parameters based on
+  * Accuracy
+  * Runtime
+  * Size
+* Using a sliding-window technique to search for vehicles in images
+* Outlier removal on the video stream with a heatmap
+* Bounding box estimation
+* Merge with the previous project "Lane Line Detection"
 
 
-
-# Start
+# Features
+## HOG
+![HOG features car](output_images/hog_features_cars.jpg)
+![HOG features noncar](output_images/hog_features_noncars.jpg)
+## Color
+![Color features car](output_images/color_features_cars.jpg)
+![Color features noncar](output_images/color_features_noncars.jpg)
 
 ## Sources for train and validation data
 ### GTI
@@ -79,7 +103,7 @@ References:
 * https://wiki.python.org/moin/GlobalInterpreterLock
 * http://www.cvlibs.net/datasets/kitti/
 * http://www.gti.ssr.upm.es/data/Vehicle_database.html
-
+* https://docs.python.org/3/library/concurrent.futures.html
 
 
 
