@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import glob
 import time
+import csv
 from pathlib import Path
 from sklearn.svm import LinearSVC, SVC
 import sklearn.svm as svm
@@ -11,12 +12,14 @@ from scipy.ndimage.measurements import label
 from skimage import data, exposure
 import pickle
 #from skimage.feature import hog
-from HelperFunctions import *
-from FindCars import *
-from Segmentation import *
+from HelperFunctions import extract_features_map
+#from FindCars import *
+#from Segmentation import *
 
 from sklearn.model_selection import train_test_split
 import concurrent.futures
+
+colornum2colorstr = {37: 'YCrCb', 53: 'HLS', 41: 'HSV', 83: 'YUV', 4: 'BGR'}
 
 def fit_model(args):
     """
@@ -39,7 +42,7 @@ class Model():
     def __init__(self):
         self.x = 0
 
-    def fit_new_model(self, pickle_file, model_config):
+    def fit_new_model(self, pickle_file, model_config, csvwriter=None):
         main_path = 'dataset/split/'
         carimages = glob.glob(main_path + 'train/car/*/*.png')
         carimages.extend(glob.glob(main_path + 'train/car/*/*.jpg'))
@@ -63,7 +66,7 @@ class Model():
         test_data = {'car': carimages, 'noncar': noncarimages}
         
         # for faster test sample size can be reduced
-        sample_size = None
+        sample_size = 100
 
         if sample_size is not None:
             train_data['car'] = train_data['car'][0:sample_size]
@@ -111,7 +114,7 @@ class Model():
         print('Feature vector length:', len(x_train[0]))
         
         print('Searching for best parameters...')
-        C_params = [0.0005, 0.001, 0.002, 0.4]
+        C_params = [0.0001, 0.0005, 0.001, 0.005]
         models = {}
         score_max = 0.
         params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,
@@ -123,8 +126,14 @@ class Model():
                 models[C] = result
                 print('Model fitted with C={}, score={:.4f}'.format(C, result[1]))
 
+                if csvwriter is not None:
+                    csvwriter.writerow([model_config['orient'], model_config['pix_per_cell'], model_config['cell_per_block'],
+                                    C, colornum2colorstr[model_config['color_space']], model_config['spatial_feat'], len(x_train[0]), result[1]])
+
                 # save all model to be tested on video
-                f_save = Path('saves/SVM_C{}_score{:.3f}.p'.format(C, result[1]))
+                f_save = Path('saves/SVM_C{}_{}_{}_{}_{}_{}_score{:.3f}.p'.format(C, model_config['orient'],
+                                                model_config['pix_per_cell'], model_config['cell_per_block'],
+                                                colornum2colorstr[model_config['color_space']], model_config['spatial_feat'], result[1]))
                 with f_save.open(mode='wb') as f:
                     model_map = {'model': result[0], 'x_scaler': x_scaler, 'model_config': model_config}
                     pickle.dump(model_map, f)
@@ -182,3 +191,31 @@ class Model():
             model_map = self.fit_new_model(pickle_file, model_config)
 
         return model_map
+
+def main():
+    pickle_file = Path('SVM.p')
+    
+    with open('parameters.csv', 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter='|')
+        
+        model = Model()
+
+        cspaces = [cv2.COLOR_RGB2YCrCb, cv2.COLOR_RGB2HLS, cv2.COLOR_RGB2HSV, cv2.COLOR_RGB2YUV, cv2.COLOR_RGB2BGR]
+        for hist_bins in [16, 32]:
+            for orient in [8, 9, 10]:
+                for pix_per_cell in [16, 8]:
+                    for cell_per_block in [2, 4]:
+                        for color_space in cspaces:
+                            for spatial_feat in [True, False]:
+                                model_config = {'color_space': color_space, 'orient': orient,
+                                                'pix_per_cell': pix_per_cell, 'cell_per_block': cell_per_block,
+                                                'hog_channel': 'ALL', 'spatial_size': (16, 16),
+                                                'hist_bins': hist_bins, 'spatial_feat': spatial_feat,
+                                                'hist_feat': True, 'hog_feat': True, 'probability': True}
+                                
+                                print('Fitting with model parameters {}'.format(model_config))
+
+                                model_map = model.fit_new_model(pickle_file, model_config, csvwriter)
+
+if __name__ == "__main__":
+    main()
