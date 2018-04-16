@@ -90,7 +90,8 @@ class ProcessImage():
         else:
             self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
                                        xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518),
+                                       xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
              
 
     def process_image(self, img):
