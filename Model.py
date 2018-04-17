@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+import sqlite3
 import cv2
 import glob
 import time
@@ -42,7 +44,7 @@ class Model():
     def __init__(self):
         self.x = 0
 
-    def fit_new_model(self, pickle_file, model_config, csvwriter=None):
+    def fit_new_model(self, pickle_file, model_config, df=None, conn=None, csvfile='parameters.csv'):
         main_path = 'dataset/split/'
         carimages = glob.glob(main_path + 'train/car/*/*.png')
         carimages.extend(glob.glob(main_path + 'train/car/*/*.jpg'))
@@ -66,7 +68,7 @@ class Model():
         test_data = {'car': carimages, 'noncar': noncarimages}
         
         # for faster test sample size can be reduced
-        sample_size = 100
+        sample_size = None
 
         if sample_size is not None:
             train_data['car'] = train_data['car'][0:sample_size]
@@ -120,15 +122,38 @@ class Model():
         params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,
                    'proba': model_config['probability']}
                             for C in C_params]
+
+        if conn is not None:
+            dbc = conn.cursor()
+        else:
+            dbc = None
+
         t2=time.time()
         with concurrent.futures.ProcessPoolExecutor() as executor:
             for C, result in zip(C_params, executor.map(fit_model, params)):
                 models[C] = result
                 print('Model fitted with C={}, score={:.4f}'.format(C, result[1]))
 
-                if csvwriter is not None:
-                    csvwriter.writerow([model_config['orient'], model_config['pix_per_cell'], model_config['cell_per_block'],
-                                    C, colornum2colorstr[model_config['color_space']], model_config['spatial_feat'], len(x_train[0]), result[1]])
+                # write to csv file
+                if df is not None:
+                    #csvwriter.writerow([model_config['orient'], model_config['pix_per_cell'], model_config['cell_per_block'],
+                    #                C, colornum2colorstr[model_config['color_space']], model_config['spatial_feat'], len(x_train[0]), result[1]])
+                    columns = ['orient', 'pix_per_cell', 'cell_per_block', 'c', 'color_space', 'hist_bins', 'spatial_feat', 'num_features', 'accuracy']
+                    new_val = ({'orient': model_config['orient'], 'pix_per_cell': model_config['pix_per_cell'], 'cell_per_block': model_config['cell_per_block'],
+                              'c': C, 'color_space': colornum2colorstr[model_config['color_space']], 'hist_bins': model_config['hist_bins'],
+                              'spatial_feat': model_config['spatial_feat'], 'num_features': len(x_train[0]), 'accuracy': result[1]})
+                    #print('New val {}'.format(new_val))
+                    df = df.append(new_val, ignore_index=True)
+                    #print(df)
+                    df.to_csv(csvfile, sep='|', index=False)
+
+                # write to database
+                if dbc is not None:
+                    dbc.execute('INSERT INTO parameter VALUES (?,?,?,?,?,?,?,?,?)', 
+                                    (model_config['orient'], model_config['pix_per_cell'], model_config['cell_per_block'],
+                                    C, colornum2colorstr[model_config['color_space']], model_config['hist_bins'],
+                                    model_config['spatial_feat'], len(x_train[0]), result[1]))
+                    conn.commit()
 
                 # save all model to be tested on video
                 f_save = Path('saves/SVM_C{}_{}_{}_{}_{}_{}_score{:.3f}.p'.format(C, model_config['orient'],
@@ -168,7 +193,7 @@ class Model():
             model_map = {'model': clf, 'x_scaler': x_scaler, 'model_config': model_config}
             pickle.dump(model_map, f)
 
-            return model_map
+            return model_map, df
 
     def fit(self, model_config):
         pickle_file = Path('SVM.p')
@@ -193,29 +218,48 @@ class Model():
         return model_map
 
 def main():
+    # parameter search
     pickle_file = Path('SVM.p')
+    conn = sqlite3.connect('parameters.db')
+    #dbc = conn.cursor()
+
+    # Create table
+    # dbc.execute('''CREATE TABLE parameter
+    #          (orient integer, pix_per_cell integer, cell_per_block integer, c real, colorspace text, hist_bins integer,
+    #          spatial_feat integer, num_features integer, accuracy real)''')
     
-    with open('parameters.csv', 'w', newline='') as csvfile:
-        csvwriter = csv.writer(csvfile, delimiter='|')
+    if True: #with open('parameters.csv', 'r+', newline='') as csvfile:
+        #csvwriter = csv.writer(csvfile, delimiter='|')
+        columns = ['orient', 'pix_per_cell', 'cell_per_block', 'c', 'color_space', 'hist_bins', 'spatial_feat', 'num_features', 'accuracy']
+
+        df = pd.read_csv('parameters.csv', sep='|')
+        #df = pd.DataFrame(columns=columns)
         
         model = Model()
 
-        cspaces = [cv2.COLOR_RGB2YCrCb, cv2.COLOR_RGB2HLS, cv2.COLOR_RGB2HSV, cv2.COLOR_RGB2YUV, cv2.COLOR_RGB2BGR]
+        cspaces = [cv2.COLOR_RGB2YCrCb, cv2.COLOR_RGB2YUV] #, cv2.COLOR_RGB2HSV,cv2.COLOR_RGB2HLS, cv2.COLOR_RGB2BGR]
         for hist_bins in [16, 32]:
             for orient in [8, 9, 10]:
-                for pix_per_cell in [16, 8]:
-                    for cell_per_block in [2, 4]:
+                for pix_per_cell in [16,]: #, 8]:
+                    for cell_per_block in [2,]: # 4]:
                         for color_space in cspaces:
                             for spatial_feat in [True, False]:
                                 model_config = {'color_space': color_space, 'orient': orient,
-                                                'pix_per_cell': pix_per_cell, 'cell_per_block': cell_per_block,
-                                                'hog_channel': 'ALL', 'spatial_size': (16, 16),
-                                                'hist_bins': hist_bins, 'spatial_feat': spatial_feat,
-                                                'hist_feat': True, 'hog_feat': True, 'probability': True}
-                                
-                                print('Fitting with model parameters {}'.format(model_config))
+                                                    'pix_per_cell': pix_per_cell, 'cell_per_block': cell_per_block,
+                                                    'hog_channel': 'ALL', 'spatial_size': (16, 16),
+                                                    'hist_bins': hist_bins, 'spatial_feat': spatial_feat,
+                                                    'hist_feat': True, 'hog_feat': True, 'probability': True}
 
-                                model_map = model.fit_new_model(pickle_file, model_config, csvwriter)
+                                if ((df['hist_bins'] == hist_bins) & (df['orient'] == orient) & (df['pix_per_cell'] == pix_per_cell) & \
+                                    (df['cell_per_block'] == cell_per_block) & (df['color_space'] == colornum2colorstr[color_space]) &
+                                    (df['spatial_feat'] == spatial_feat)).any():
+                                    print('Existing row {}'.format(model_config))
+                                else:
+                                    print('Fitting with model parameters {}'.format(model_config))
+
+                                    model_map, df = model.fit_new_model(pickle_file, model_config, df, conn)
+
+    conn.close()
 
 if __name__ == "__main__":
     main()

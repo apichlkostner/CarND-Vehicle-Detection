@@ -26,7 +26,7 @@ The steps of this project are the following:
 ## Colorspace
 Images can be processed using different color spaces. The most common color space is RGB which composes color from three base colors red, green and blue. This colorspace is good to be shown on a screen which uses the same base colors.
 
-For feature detection the RGB colorspace is often not optimal. Better are color spaces which are based on a lumina signal and some others defining the color. Examples are HSV, HSL and YCrCb.
+For feature detection the RGB colorspace is often not optimal. Better are color spaces which are based on a lumina signal and some others defining the color. Examples are YUV, YCrCb and HSV.
 
 The following feature examples are all based on the YCrCb color space, the HOG features are calculated from the Y component. However for the final feature descriptor HOG features are calculated from all three components.
 
@@ -43,6 +43,82 @@ Color histograms of cars:
 
 Color histograms of non-cars:
 ![Color features noncar](output_images/color_features_noncars.jpg)
+
+# Best parameter search
+
+## HOG features
+There are many parameters for the HOG feature calculation. Since the vehicle detection should run very fast to be used in autonomous vehicles it was necessary to use parameters which result in a smaller feature vector.
+
+Finally the following parameters were chosen which are relatively fast to calculate but are good enough for the purpose.
+
+|Parameter               | Value  |
+|------------------------|--------|
+|Number of orientations  | 9      |
+|Pixel per cell          | 16     |
+|Cells per block         | 2      |
+
+## Color features
+Best results were obtained with the color spaces YUV and YCrCb.
+Finally YCrCb was choosen though the other gave similar results.
+
+The histogram used 16 bins.
+
+## Spatial features
+
+## Classifier
+The classifier choosen was a linear SVM. Since the feature vector is relatively large compared to the number of training samples the linear SVM should give a good result without overfitting.
+
+The regularization parameter finally used was C=0.001 which gave the best result after testing different values.
+
+## Parameter search
+
+To find the best parameter with the given train and test first some manual tests with some values were done.
+It was found out that smaller C values about C=0.001 give best results on the test set.
+
+So a search over the following parameters were done:
+
+Parameter | Value
+----------|-------
+Colorspaces | YCrCb, HLS, HSV, YUV, BGR
+Color histogram bins | 16, 32
+HOG orientations | 8, 9, 10
+HOG pixels per cell | 16, 8
+HOG cells per block | 2, 4
+Using spatial featues | True, False
+C | 0.0005, 0.001, 0.005, 0.01
+
+The best test set accuracies are shown in the table below:
+
+orient|pix_per_cell|cell_per_block|c|color_space|hist_bins|spatial_feat|num_features|accuracy
+-|-|-|-|-|-|-|-|-
+8|16|2|0.005|YUV|16|True|1680|0.992201834862385
+9|16|2|0.001|YCrCb|16|True|1788|0.991743119266055
+9|16|2|0.0005|YUV|16|True|1788|0.991743119266055
+9|16|2|0.001|YUV|16|True|1788|0.991284403669725
+9|16|2|0.0005|YCrCb|16|True|1788|0.990825688073394
+9|16|2|0.005|YCrCb|16|True|1788|0.990366972477064
+9|16|2|0.005|YUV|16|True|1788|0.990366972477064
+9|8|4|0.0001|YCrCb|16|True|11616|0.990366972477064
+8|16|2|0.001|YUV|16|False|912|0.990366972477064
+8|16|2|0.001|YUV|16|True|1680|0.989908256880734
+8|16|2|0.0005|YCrCb|16|False|912|0.989908256880734
+8|16|2|0.0005|YUV|16|False|912|0.989908256880734
+8|16|2|0.0005|YCrCb|16|True|1680|0.989449541284404
+8|16|2|0.0005|YUV|16|True|1680|0.988532110091743
+8|16|4|0.001|YCrCb|16|True|1200|0.988532110091743
+8|8|4|0.0001|YUV|16|True|10416|0.988532110091743
+9|8|2|0.0001|YCrCb|16|True|6108|0.988532110091743
+8|16|2|0.005|YCrCb|16|True|1680|0.988073394495413
+
+Full database with all combinations:
+
+[Parameter database](parameters.db)
+
+[Parameter table (csv)](parameters.csv)
+
+Since the parameter search needs much time the implementation saves the values in a database. The search can be interrupted and only missing parameter combinations are calculated when the search is started again.
+First the data was only stored in a csv file but to be save when the search is interrupted while writing to the csv file an additional sqlite3 database was used.
+To speed up the search the four C parameters were calculated in parallel using four processes.
 
 ## Sources for train and validation data
 ### GTI
@@ -97,7 +173,7 @@ To overcome this problem and do some real parallelization the multi-processing l
 
 Multiprocessing was used to train SVM with different parameter in parallel and use the best model parameters after testing with the test set.
 
-
+## Parameter search with database
 
 
 
