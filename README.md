@@ -57,6 +57,8 @@ Finally the following parameters were chosen which are relatively fast to calcul
 |Pixel per cell          | 16     |
 |Cells per block         | 2      |
 
+Though it was mentioned in the course that with 8 pixels per cell the result should be better since it can better detect the car lights this value has no better accuracy in the test set. Additionally the feature vector is so much larger that the calculation time is too high.
+
 ## Color features
 Best results were obtained with the color spaces YUV and YCrCb.
 Finally YCrCb was choosen though the other gave similar results.
@@ -175,7 +177,10 @@ Multiprocessing was used to train SVM with different parameter in parallel and u
 
 ## Parameter search with database
 
+The parameter search is currently implemented inside the main function of `Model.py`. It can be started with `python3 Model.py`.
+It creates in parallel a csv file with | as separator which can be used directly in a markup file as table and a sqlite3 database to store the results. The models are saved with different names so the best ones can be tested with the video.
 
+Only for new parameter combinations the model is fitted and the results are stored in the database. So the parameter search can always interrupted and started again with the same or new parameter search space.
 
 
 ## Files
