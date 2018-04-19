@@ -13,10 +13,8 @@ from sklearn.preprocessing import StandardScaler
 from scipy.ndimage.measurements import label
 from skimage import data, exposure
 import pickle
-#from skimage.feature import hog
+from FeatureExtract import FeatureExtractor
 from HelperFunctions import extract_features_map
-#from FindCars import *
-#from Segmentation import *
 
 from sklearn.model_selection import train_test_split
 import concurrent.futures
@@ -131,7 +129,6 @@ class Model():
 
                 # write to csv file
                 if df is not None:
-                    columns = ['orient', 'pix_per_cell', 'cell_per_block', 'c', 'color_space', 'hist_bins', 'spatial_feat', 'num_features', 'accuracy']
                     new_val = ({'orient': model_config['orient'], 'pix_per_cell': model_config['pix_per_cell'], 'cell_per_block': model_config['cell_per_block'],
                               'c': C, 'color_space': colornum2colorstr[model_config['color_space']], 'hist_bins': model_config['hist_bins'],
                               'spatial_feat': model_config['spatial_feat'], 'num_features': len(x_train[0]), 'accuracy': result[1]})

@@ -22,6 +22,10 @@ The steps of this project are the following:
 ## Output of the pipeline
 ![VehicleDetection](output_images/frame_0946.jpg)
 
+## Video result
+
+![Video](processed_videos/project_video.mp4)
+
 # Features
 ## Colorspace
 Images can be processed using different color spaces. The most common color space is RGB which composes color from three base colors red, green and blue. This colorspace is good to be shown on a screen which uses the same base colors.
