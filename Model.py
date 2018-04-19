@@ -44,7 +44,8 @@ class Model():
     def __init__(self):
         self.x = 0
 
-    def fit_new_model(self, pickle_file, model_config, df=None, dbc=None, csvfile='parameters.csv'):
+    def fit_new_model(self, pickle_file, model_config, C_params=[0.0005, 0.001, 0.005, 0.01],
+                         df=None, dbc=None, csvfile='parameters.csv'):
         main_path = 'dataset/split/'
         carimages = glob.glob(main_path + 'train/car/*/*.png')
         carimages.extend(glob.glob(main_path + 'train/car/*/*.jpg'))
@@ -115,8 +116,7 @@ class Model():
             model_config['orient'], model_config['pix_per_cell'], model_config['cell_per_block']))
         print('Feature vector length:', len(x_train[0]))
         
-        print('Searching for best parameters...')
-        C_params = [0.0005, 0.001, 0.005, 0.01]
+        print('Searching for best parameters...')        
         models = {}
         score_max = 0.
         params = [{'C': C, 'x_train': x_train, 'y_train': y_train, 'x_test': x_test, 'y_test': y_test,
@@ -229,7 +229,7 @@ def main():
 
     cspaces = [cv2.COLOR_RGB2YCrCb, cv2.COLOR_RGB2YUV] #, cv2.COLOR_RGB2HSV,cv2.COLOR_RGB2HLS, cv2.COLOR_RGB2BGR]
     for hist_bins in [16, 32]:
-        for orient in [8, 9, 10, 11, 12]:
+        for orient in [8, 9, 10]:
             for pix_per_cell in [16]:
                 for cell_per_block in [2,]: # 4]:
                     for color_space in cspaces:
@@ -239,24 +239,29 @@ def main():
                                             'hog_channel': 'ALL', 'spatial_size': (16, 16),
                                             'hist_bins': hist_bins, 'spatial_feat': spatial_feat,
                                             'hist_feat': True, 'hog_feat': True, 'probability': True}
-
-                            # check if rows with the parameter combination are already available
-                            dbc.execute('''SELECT 1 FROM parameter WHERE
-                                    orient=? AND pix_per_cell=? AND cell_per_block=?
-                                    AND colorspace=? AND hist_bins=? AND spatial_feat=?''',
-                                    (orient, pix_per_cell, cell_per_block, colornum2colorstr[color_space],
-                                    hist_bins, spatial_feat))
-                            exists = dbc.fetchone()
+                            C_params_new = []
+                            for C in [0.1, 1., 2., 4.]:
+                                # check if rows with the parameter combination are already available
+                                dbc.execute('''SELECT 1 FROM parameter WHERE
+                                        orient=? AND pix_per_cell=? AND cell_per_block=?
+                                        AND colorspace=? AND hist_bins=? AND spatial_feat=? AND C=?''',
+                                        (orient, pix_per_cell, cell_per_block, colornum2colorstr[color_space],
+                                        hist_bins, spatial_feat, C))
+                                exists = dbc.fetchone()
+                                
+                                if exists is not None:
+                                    print('Skipping existing row C={}, {}'.format(C, model_config))
+                                else:
+                                    C_params_new.append(C)
                             
-                            if exists is not None:
-                                print('Skipping existing row {}'.format(model_config))
-                            else:
-                                print('Fitting new model parameters {}'.format(model_config))
+                            if len(C_params_new) > 0:
+                                print('Fitting new model parameters wit C={}, {}'.format(C_params_new, model_config))
 
-                                _, df = model.fit_new_model(pickle_file, model_config, df, dbc)
+                                _, df = model.fit_new_model(pickle_file, C_params=C_params_new,
+                                                            model_config=model_config, df=df, dbc=dbc)
 
-                            # commit when all processes from fit_new_model have finished
-                            conn.commit()
+                                # commit when all   processes from fit_new_model have finished
+                                conn.commit()
 
     conn.close()
 

@@ -67,6 +67,9 @@ The histogram used 16 bins.
 
 ## Spatial features
 
+As spatial features the image is resized from 64x64 pixels to 16x16 pixels and the values are taken as feature.
+This feature type didn't help much to have a better test set accuracy.
+
 ## Classifier
 The classifier choosen was a linear SVM. Since the feature vector is relatively large compared to the number of training samples the linear SVM should give a good result without overfitting.
 
@@ -75,7 +78,6 @@ The regularization parameter finally used was C=0.001 which gave the best result
 ## Parameter search
 
 To find the best parameter with the given train and test first some manual tests with some values were done.
-It was found out that smaller C values about C=0.001 give best results on the test set.
 
 So a search over the following parameters were done:
 
@@ -83,11 +85,11 @@ Parameter | Value
 ----------|-------
 Colorspaces | YCrCb, HLS, HSV, YUV, BGR
 Color histogram bins | 16, 32
-HOG orientations | 8, 9, 10
+HOG orientations | 8, 9, 10, 11, 12
 HOG pixels per cell | 16, 8
 HOG cells per block | 2, 4
 Using spatial featues | True, False
-C | 0.0005, 0.001, 0.005, 0.01
+C | 0.0005, 0.001, 0.005, 0.01, 0.1, 1, 2, 4
 
 The best test set accuracies are shown in the table below:
 
@@ -121,6 +123,12 @@ Full database with all combinations:
 Since the parameter search needs much time the implementation saves the values in a database. The search can be interrupted and only missing parameter combinations are calculated when the search is started again.
 First the data was only stored in a csv file but to be save when the search is interrupted while writing to the csv file an additional sqlite3 database was used.
 To speed up the search the four C parameters were calculated in parallel using four processes.
+
+# Sliding windows
+
+Windows:
+
+![Windows](output_images/boxes.jpg)
 
 ## Sources for train and validation data
 ### GTI

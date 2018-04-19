@@ -242,9 +242,10 @@ def find_cars_sliding(args):
 
     return box_list
 
-def main():
-    a = slide_window_triangle((0, 100), (0, 100), (30, 30), (0.5, 0.5))
-    print(a)
+
 
 if __name__ == "__main__":
+    def main():
+        a = slide_window_triangle((0, 100), (0, 100), (30, 30), (0.5, 0.5))
+        print(a)
     main()

@@ -85,7 +85,7 @@ class ProcessImage():
             # triangular shape of the ROI
             self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
                                         xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
+            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 650), 
                                         xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
         else:
             self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
@@ -198,4 +198,16 @@ class ProcessImage():
         return window_img    
 
 
+if __name__ == "__main__":
+    def main():
+        img = cv2.imread('test_images/test1.jpg')
+        img = cv2.image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        procimg = ProcessImage()
+        procimg.fit(None)
+        boxes = procimg.windows[0]+procimg.windows[1]
+        print(boxes)
+        img = draw_boxes(img, boxes, color=(0, 255, 0), thick=2)        
+        img = cv2.image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        cv2.imwrite('output_images/boxes.jpg', img)
 
+    main()
