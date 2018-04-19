@@ -229,7 +229,7 @@ def main():
 
     cspaces = [cv2.COLOR_RGB2YCrCb, cv2.COLOR_RGB2YUV] #, cv2.COLOR_RGB2HSV,cv2.COLOR_RGB2HLS, cv2.COLOR_RGB2BGR]
     for hist_bins in [16, 32]:
-        for orient in [8, 9, 10]:
+        for orient in [8, 9, 10, 11, 12]:
             for pix_per_cell in [16]:
                 for cell_per_block in [2,]: # 4]:
                     for color_space in cspaces:

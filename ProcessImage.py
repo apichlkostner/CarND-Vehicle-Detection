@@ -85,7 +85,7 @@ class ProcessImage():
             # triangular shape of the ROI
             self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
                                         xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 650), 
+            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
                                         xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
         else:
             self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
@@ -110,7 +110,7 @@ class ProcessImage():
         draw_image = np.copy(img)
 
         # transform to selected colorspace of model
-        img = cv2.cvtColor(img, self.model_config['color_space'])
+        img = cv2.cvtColor(img_orig, self.model_config['color_space'])
 
         # initialization of heat map
         if self.heat is None:
@@ -158,17 +158,19 @@ class ProcessImage():
         # heat of one image
         heat = np.zeros_like(img[:,:,0]).astype(np.float)
         heat = add_heat(heat, box_list)
-        heat = np.clip(heat, 0, 3)
+        heat = np.clip(heat, 0, 1)
 
         # Global heat map average
-        alpha = 0.8
+        alpha = 0.7
         self.heat = alpha * self.heat + heat
-        self.heat = np.clip(self.heat, 0, 6)
+        self.heat = np.clip(self.heat, 0, 8)
+
+        heat_thres = apply_threshold(self.heat.copy(), 3)
         
         heatmap_img = np.dstack((self.heat, np.zeros_like(heat), np.zeros_like(heat)))
 
         # Find final boxes from heatmap using label function
-        labels = label(heat)
+        labels = label(heat_thres)
 
         # draw the boxes
         window_img, boxes = draw_labeled_bboxes(draw_image, labels)
