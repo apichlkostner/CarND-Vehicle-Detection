@@ -48,7 +48,12 @@ Color histograms of cars:
 Color histograms of non-cars:
 ![Color features noncar](output_images/color_features_noncars.jpg)
 
-# Best parameter search
+# Features
+
+## Implementation
+The features are calculated in the class `FeatureExtractor` in `FeatureExtract.py`. It is initialized with a configuration in which all feature parameters are defined.
+
+With the method `calc_features()` the features of an image can be extracted.
 
 ## HOG features
 There are many parameters for the HOG feature calculation. Since the vehicle detection should run very fast to be used in autonomous vehicles it was necessary to use parameters which result in a smaller feature vector.
@@ -72,16 +77,20 @@ The histogram used 16 bins.
 ## Spatial features
 
 As spatial features the image is resized from 64x64 pixels to 16x16 pixels and the values are taken as feature.
-This feature type didn't help much to have a better test set accuracy.
+This feature type didn't help much to have a better test set accuracy but gave better results in the video.
 
 ## Classifier
 The classifier choosen was a linear SVM. Since the feature vector is relatively large compared to the number of training samples the linear SVM should give a good result without overfitting.
 
 The regularization parameter finally used was C=0.001 which gave the best result after testing different values.
 
+## Model fitting
+The model is encapsulated in the `Model` object in `Model.py`. When its `fit()` method is called it tries to load itself with the corresponding feature parameter from the file SVM.p. If the file is not available it loads the training images and fits a new model which is then saved.
+
 ## Parameter search
 
-To find the best parameter with the given train and test first some manual tests with some values were done.
+To find the best parameter with the given train and test first some manual tests with some values were done. The search is implemented in `Model.py` in the `main()` function.
+
 
 So a search over the following parameters were done:
 
@@ -99,24 +108,48 @@ The best test set accuracies are shown in the table below:
 
 orient|pix_per_cell|cell_per_block|c|color_space|hist_bins|spatial_feat|num_features|accuracy
 -|-|-|-|-|-|-|-|-
+12|16|2|0.0005|YCrCb|16|True|2112|0.994036697247706
+10|16|2|0.001|YCrCb|32|True|1944|0.993577981651376
+12|16|2|0.0005|YCrCb|32|True|2160|0.993577981651376
+12|16|2|0.001|YCrCb|32|False|1392|0.993577981651376
+10|16|2|0.001|YUV|16|True|1896|0.993119266055046
+11|16|2|0.0005|YCrCb|16|True|2004|0.993119266055046
+12|16|2|0.0005|YUV|32|True|2160|0.993119266055046
+11|16|2|0.001|YCrCb|16|True|2004|0.992660550458715
+12|16|2|0.001|YCrCb|32|True|2160|0.992660550458715
+12|16|2|0.001|YUV|32|True|2160|0.992660550458715
 8|16|2|0.005|YUV|16|True|1680|0.992201834862385
+10|16|2|0.001|YCrCb|16|True|1896|0.992201834862385
+10|16|2|0.0005|YCrCb|16|False|1128|0.992201834862385
+10|16|2|0.005|YCrCb|32|True|1944|0.992201834862385
+12|16|2|0.0005|YCrCb|16|False|1344|0.992201834862385
+11|16|2|0.001|YCrCb|32|True|2052|0.992201834862385
+11|16|2|0.001|YCrCb|32|False|1284|0.992201834862385
 9|16|2|0.001|YCrCb|16|True|1788|0.991743119266055
 9|16|2|0.0005|YUV|16|True|1788|0.991743119266055
+10|16|2|0.0005|YCrCb|16|True|1896|0.991743119266055
+10|16|2|0.0005|YUV|16|True|1896|0.991743119266055
+10|16|2|0.0005|YCrCb|32|True|1944|0.991743119266055
+10|16|2|0.001|YUV|32|True|1944|0.991743119266055
+11|16|2|0.001|YCrCb|16|False|1236|0.991743119266055
+11|16|2|0.0005|YCrCb|32|True|2052|0.991743119266055
+12|16|2|0.0005|YCrCb|32|False|1392|0.991743119266055
+12|16|2|0.005|YCrCb|32|False|1392|0.991743119266055
 9|16|2|0.001|YUV|16|True|1788|0.991284403669725
-9|16|2|0.0005|YCrCb|16|True|1788|0.990825688073394
-9|16|2|0.005|YCrCb|16|True|1788|0.990366972477064
-9|16|2|0.005|YUV|16|True|1788|0.990366972477064
-9|8|4|0.0001|YCrCb|16|True|11616|0.990366972477064
-8|16|2|0.001|YUV|16|False|912|0.990366972477064
-8|16|2|0.001|YUV|16|True|1680|0.989908256880734
-8|16|2|0.0005|YCrCb|16|False|912|0.989908256880734
-8|16|2|0.0005|YUV|16|False|912|0.989908256880734
-8|16|2|0.0005|YCrCb|16|True|1680|0.989449541284404
-8|16|2|0.0005|YUV|16|True|1680|0.988532110091743
-8|16|4|0.001|YCrCb|16|True|1200|0.988532110091743
-8|8|4|0.0001|YUV|16|True|10416|0.988532110091743
-9|8|2|0.0001|YCrCb|16|True|6108|0.988532110091743
-8|16|2|0.005|YCrCb|16|True|1680|0.988073394495413
+10|16|2|0.001|YCrCb|16|False|1128|0.991284403669725
+10|16|2|0.005|YCrCb|16|False|1128|0.991284403669725
+10|16|2|0.005|YUV|16|True|1896|0.991284403669725
+9|16|2|0.005|YCrCb|32|True|1836|0.991284403669725
+9|16|2|0.0005|YUV|32|True|1836|0.991284403669725
+10|16|2|0.0005|YCrCb|32|False|1176|0.991284403669725
+10|16|2|0.0005|YUV|32|True|1944|0.991284403669725
+10|16|2|0.005|YUV|32|True|1944|0.991284403669725
+12|16|2|0.001|YCrCb|16|True|2112|0.991284403669725
+12|16|2|0.0005|YUV|16|True|2112|0.991284403669725
+10|16|2|0.1|YCrCb|16|True|1896|0.991284403669725
+10|16|2|1|YCrCb|16|True|1896|0.991284403669725
+10|16|2|2|YCrCb|16|True|1896|0.991284403669725
+10|16|2|4|YCrCb|16|True|1896|0.991284403669725
 
 Full database with all combinations:
 
@@ -130,9 +163,24 @@ To speed up the search the four C parameters were calculated in parallel using f
 
 # Sliding windows
 
-Windows:
+The first try first calculated the HOG features of the complete region of interest and the sliding window algorithm calculateded the feature vector from the resized image and the corresponding parts of the HOG image.
+This improved the algorithm speed since for overlapping windows less HOG caluclations had to be done. This algorithm is implemented in `ProcessImage.py` in line 139.
+
+But even this algorithm was to small. To improve the speed further the next concept was to only detect cars at the borders on the image and track the cars with a car object that has position and speed and updates it's position with every frame based on the speed and the new frame around the predicted position.
+
+To achieve this the algorithm was changed to calculate features for every window separetely without using the HOG subsampling.
+
+Tests were done with a triangular region on the right side where the other cars can be found. The windows of the triangular region are calculated once in `ProcessImage.py` in the `fit()` method.
+
+To improve the speed an overlap of only 0.5 of the slinding window was used and in the lower part of the image only larger windows sizes with (96, 96) pixels were used.
+
+In the upper part also windows with size (64, 64) were used.
+
+With smaller windows and more overlap the detection accuracy could be improved but the calculation time becomes much worse. Especially bounding boxes are often too big because the windows have a relatively large distance to each other. The implementation is done in `ProcessImage.py` in line 136.
 
 ![Windows](output_images/boxes.jpg)
+
+The concept with the car objects and the tracking algorthm was not implemented since the development time was missing. 
 
 ## Sources for train and validation data
 ### GTI
@@ -212,20 +260,7 @@ Only for new parameter combinations the model is fitted and the results are stor
 |Segmentation.py | Flood fill for image segmentation |
 
 
-
-
-GTI: Taken parts for test set since partly ordered
-Kitti: many similar images, completely random, removed half of the set
-Udacity: extracted with ExtractImages.py, taken manually images from back
-Video: taken good examples from video
-
-Done:
-- Parallelization with threads (GIL) and processes
-
-Tried:
-- Color segmentation with flood fill on detected cars
-- Vehicle object with position and velocity
-
+# Discussion
 
 References:
 
@@ -233,115 +268,3 @@ References:
 * http://www.cvlibs.net/datasets/kitti/
 * http://www.gti.ssr.upm.es/data/Vehicle_database.html
 * https://docs.python.org/3/library/concurrent.futures.html
-
-
-
-
-
-## Template
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
----
-
-**Vehicle Detection Project**
-
-The goals / steps of this project are the following:
-
-* Perform a Histogram of Oriented Gradients (HOG) feature extraction on a labeled training set of images and train a classifier Linear SVM classifier
-* Optionally, you can also apply a color transform and append binned color features, as well as histograms of color, to your HOG feature vector. 
-* Note: for those first two steps don't forget to normalize your features and randomize a selection for training and testing.
-* Implement a sliding-window technique and use your trained classifier to search for vehicles in images.
-* Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
-* Estimate a bounding box for vehicles detected.
-
-[//]: # (Image References)
-[image1]: ./examples/car_not_car.png
-[image2]: ./examples/HOG_example.jpg
-[image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
-
-## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
-
----
-### Writeup / README
-
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one.  You can submit your writeup as markdown or pdf.  [Here](https://github.com/udacity/CarND-Vehicle-Detection/blob/master/writeup_template.md) is a template writeup for this project you can use as a guide and a starting point.  
-
-You're reading it!
-
-### Histogram of Oriented Gradients (HOG)
-
-#### 1. Explain how (and identify where in your code) you extracted HOG features from the training images.
-
-The code for this step is contained in the first code cell of the IPython notebook (or in lines # through # of the file called `some_file.py`).  
-
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an example of one of each of the `vehicle` and `non-vehicle` classes:
-
-![alt text][image1]
-
-I then explored different color spaces and different `skimage.hog()` parameters (`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random images from each of the two classes and displayed them to get a feel for what the `skimage.hog()` output looks like.
-
-Here is an example using the `YCrCb` color space and HOG parameters of `orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
-
-
-![alt text][image2]
-
-#### 2. Explain how you settled on your final choice of HOG parameters.
-
-I tried various combinations of parameters and...
-
-#### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
-
-I trained a linear SVM using...
-
-### Sliding Window Search
-
-#### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
-
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
-
-![alt text][image3]
-
-#### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
-
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
-
-![alt text][image4]
----
-
-### Video Implementation
-
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
-
-
-#### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
-
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
-
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
-
-### Here are six frames and their corresponding heatmaps:
-
-![alt text][image5]
-
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
-
-
----
-
-### Discussion
-
-#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
