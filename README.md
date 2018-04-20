@@ -19,6 +19,13 @@ The steps of this project are the following:
 * Bounding box estimation
 * Merge with the previous project "Lane Line Detection"
 
+## Starting
+The video processing can be started with
+
+`python3 RenderVideo.py <video filename>`
+
+If the video filename is missing it processes the video `test_video.mp4`.
+
 ## Output of the pipeline
 ![VehicleDetection](output_images/frame_0946.jpg)
 
@@ -75,10 +82,11 @@ Finally YCrCb was choosen though the other gave similar results.
 The histogram used 16 bins.
 
 ## Spatial features
-
 As spatial features the image is resized from 64x64 pixels to 16x16 pixels and the values are taken as feature.
 This feature type didn't help much to have a better test set accuracy but gave better results in the video.
 
+## Feature normalization
+The feature vectors are normalized using the `StanderdScaler` of `sklearn`. It's calculated from the training data features in `Model.py` in line 108. Then it's saved with the other model data.
 ## Classifier
 The classifier choosen was a linear SVM. Since the feature vector is relatively large compared to the number of training samples the linear SVM should give a good result without overfitting.
 
@@ -204,7 +212,7 @@ The non car images were also not helpfull since they contain only objects which 
 ![Udacity dataset](output_images/udacity_dataset.jpg)
 
 ### Video
-The images from the video are splitted to smaller samples which are classified by hand to get more non-car samples from the target images (hard negative mining).
+The images from the video are splitted to smaller samples which are classified by hand to get more non-car samples from the target images (hard negative mining). This is done in `DataGeneration.py` in the method `create_training_data()` of the class `TrainingDataGenerator`.
 
 ## Validation data
 Most of the vehicle images used here are from video sequences so many images are very similar to other images. So a random train/test split is not the best way to find optimal model parameters.
@@ -223,6 +231,7 @@ Therefore the split was done manually in this project. The images from the GTI d
 * Save and restore classifier with all parameters used for feature extraction and normalization. Save and restore done in feature extraction class itself.
 
 ## Encapsulation
+
 
 ## Parallelization
 To improve the processing speed it is helpful to split the algorithms in pieces which can be processed on different cores.
@@ -254,13 +263,22 @@ Only for new parameter combinations the model is fitted and the results are stor
 |FeatureExtrac.py | Encapsulates the feature extraction using HOG, color histogram and spatial histogram, including parameters |
 |HelperFunctions.py | Helper functions like drawing boxes or generating box sets |
 |FindCars.py      | Older search algorithm |
-|CameraCalibration.py | 
+|Vehicles.py     | First try with a vehicle object for tracking |
+|CameraCalibration.py | Camera calibration |
 |ExtractImages.py | Extract train images from video or from Udacity dataset |
 |DataGeneration.py | Generates training data from images |
 |Segmentation.py | Flood fill for image segmentation |
-
+|LaneDetection.py | Merge from previous project to detect the lane |
+|LaneFit.py | Merge from previous project to detect the lane |
+|LaneDetection.py | Merge from previous project to detect the lane |
+|ProcessImageLane.py | Merge from previous project to detect the lane |
 
 # Discussion
+With the simple sliding window approach it seems to be impossible to find all cars reliably. Since there are many false positives it's necessary to filter the detections over time and the threshold must be relatively high to remove the false positives. Then car detection becomes slower.
+
+To overcome this problem it might be necessary to have a good object tracking with postions, velocities and probabilities what object it is.
+
+An implementation in a fast compilable language is also necessary since the algorithm can't be vectorized efficiently. The sliding window approach needs a double nested loop which should be much faster in a compiled version.
 
 References:
 
