@@ -1,5 +1,3 @@
-# Draft
-
 # Summary
 
 The steps of this project are the following:
@@ -44,15 +42,19 @@ The following feature examples are all based on the YCrCb color space, the HOG f
 
 ## HOG
 HOG features of cars:
+
 ![HOG features car](output_images/hog_features_cars.jpg)
 
 HOG features of non-cars:
+
 ![HOG features noncar](output_images/hog_features_noncars.jpg)
 ## Color
 Color histograms of cars:
+
 ![Color features car](output_images/color_features_cars.jpg)
 
 Color histograms of non-cars:
+
 ![Color features noncar](output_images/color_features_noncars.jpg)
 
 # Features
@@ -75,18 +77,20 @@ Finally the following parameters were chosen which are relatively fast to calcul
 
 Though it was mentioned in the course that with 8 pixels per cell the result should be better since it can better detect the car lights this value has no better accuracy in the test set. Additionally the feature vector is so much larger that the calculation time is too high.
 
-## Color features
+The implementation is in `FeatureExtract.py` in the method `calc_hog_features()` (line 9)
+
 Best results were obtained with the color spaces YUV and YCrCb.
 Finally YCrCb was choosen though the other gave similar results.
 
-The histogram used 16 bins.
+## Color features
+From the three color components a histogram with each 16 bins was used as color features.
 
 ## Spatial features
 As spatial features the image is resized from 64x64 pixels to 16x16 pixels and the values are taken as feature.
 This feature type didn't help much to have a better test set accuracy but gave better results in the video.
 
 ## Feature normalization
-The feature vectors are normalized using the `StanderdScaler` of `sklearn`. It's calculated from the training data features in `Model.py` in line 108. Then it's saved with the other model data.
+The feature vectors are normalized using the `StandardScaler` of `sklearn`. It's calculated from the training data features in `Model.py` in line 108. Then it's saved with the other model data.
 ## Classifier
 The classifier choosen was a linear SVM. Since the feature vector is relatively large compared to the number of training samples the linear SVM should give a good result without overfitting.
 
@@ -133,33 +137,8 @@ orient|pix_per_cell|cell_per_block|c|color_space|hist_bins|spatial_feat|num_feat
 12|16|2|0.0005|YCrCb|16|False|1344|0.992201834862385
 11|16|2|0.001|YCrCb|32|True|2052|0.992201834862385
 11|16|2|0.001|YCrCb|32|False|1284|0.992201834862385
-9|16|2|0.001|YCrCb|16|True|1788|0.991743119266055
-9|16|2|0.0005|YUV|16|True|1788|0.991743119266055
-10|16|2|0.0005|YCrCb|16|True|1896|0.991743119266055
-10|16|2|0.0005|YUV|16|True|1896|0.991743119266055
-10|16|2|0.0005|YCrCb|32|True|1944|0.991743119266055
-10|16|2|0.001|YUV|32|True|1944|0.991743119266055
-11|16|2|0.001|YCrCb|16|False|1236|0.991743119266055
-11|16|2|0.0005|YCrCb|32|True|2052|0.991743119266055
-12|16|2|0.0005|YCrCb|32|False|1392|0.991743119266055
-12|16|2|0.005|YCrCb|32|False|1392|0.991743119266055
-9|16|2|0.001|YUV|16|True|1788|0.991284403669725
-10|16|2|0.001|YCrCb|16|False|1128|0.991284403669725
-10|16|2|0.005|YCrCb|16|False|1128|0.991284403669725
-10|16|2|0.005|YUV|16|True|1896|0.991284403669725
-9|16|2|0.005|YCrCb|32|True|1836|0.991284403669725
-9|16|2|0.0005|YUV|32|True|1836|0.991284403669725
-10|16|2|0.0005|YCrCb|32|False|1176|0.991284403669725
-10|16|2|0.0005|YUV|32|True|1944|0.991284403669725
-10|16|2|0.005|YUV|32|True|1944|0.991284403669725
-12|16|2|0.001|YCrCb|16|True|2112|0.991284403669725
-12|16|2|0.0005|YUV|16|True|2112|0.991284403669725
-10|16|2|0.1|YCrCb|16|True|1896|0.991284403669725
-10|16|2|1|YCrCb|16|True|1896|0.991284403669725
-10|16|2|2|YCrCb|16|True|1896|0.991284403669725
-10|16|2|4|YCrCb|16|True|1896|0.991284403669725
 
-Full database with all combinations:
+Full database with more than 500 combinations:
 
 [Parameter database](parameters.db)
 
@@ -174,7 +153,7 @@ To speed up the search the four C parameters were calculated in parallel using f
 The first try first calculated the HOG features of the complete region of interest and the sliding window algorithm calculateded the feature vector from the resized image and the corresponding parts of the HOG image.
 This improved the algorithm speed since for overlapping windows less HOG caluclations had to be done. This algorithm is implemented in `ProcessImage.py` in line 139.
 
-But even this algorithm was to small. To improve the speed further the next concept was to only detect cars at the borders on the image and track the cars with a car object that has position and speed and updates it's position with every frame based on the speed and the new frame around the predicted position.
+But even this algorithm was to slow. To improve the speed further the next idea was to only detect cars at the borders on the image and track the cars with a car object that has position and speed and updates it's position with every frame based on the speed and the new frame around the predicted position (this is currently not finished).
 
 To achieve this the algorithm was changed to calculate features for every window separetely without using the HOG subsampling.
 
@@ -188,7 +167,27 @@ With smaller windows and more overlap the detection accuracy could be improved b
 
 ![Windows](output_images/boxes.jpg)
 
-The concept with the car objects and the tracking algorthm was not implemented since the development time was missing. 
+The concept with the car objects and the tracking algorthm was not implemented since there was not enough time for further development.
+
+## False positive supression
+Since the classifier detects many false positives the following methods to supress them were implemented:
+
+* Filtering the detections with a heat map for every frame
+* Filtering of the frame heatmap with a global heatmap over many frames
+* Rejecting positives with less than 90% confidence
+* Testing the video performance with many of the good classifiers found by the parameter search and choosing the best manually
+* Hard negative mining with samples extracted from the video
+
+Here are some examples, red is the heat map, green boxes are single positives, blue boxes are the final detection:
+![Heatmap1](output_images/heatmap1.jpg)
+
+![Heatmap2](output_images/heatmap2.jpg)
+
+![Heatmap3](output_images/heatmap3.jpg)
+
+## Performance
+
+With the current implementation the video processing runs with 3 images/s on a i5-4670.
 
 ## Sources for train and validation data
 ### GTI
@@ -229,9 +228,6 @@ Therefore the split was done manually in this project. The images from the GTI d
 ### Feature parameters don't match
 * Encapsulation of the feature extraction process, no different functions to calculate in different stages (feature extraction for classifier training, video processing)
 * Save and restore classifier with all parameters used for feature extraction and normalization. Save and restore done in feature extraction class itself.
-
-## Encapsulation
-
 
 ## Parallelization
 To improve the processing speed it is helpful to split the algorithms in pieces which can be processed on different cores.
@@ -280,7 +276,7 @@ To overcome this problem it might be necessary to have a good object tracking wi
 
 An implementation in a fast compilable language is also necessary since the algorithm can't be vectorized efficiently. The sliding window approach needs a double nested loop which should be much faster in a compiled version.
 
-References:
+# References:
 
 * https://wiki.python.org/moin/GlobalInterpreterLock
 * http://www.cvlibs.net/datasets/kitti/

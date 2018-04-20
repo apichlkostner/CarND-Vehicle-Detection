@@ -51,6 +51,8 @@ def search_windows(img, windows, conf, feat_extr):
 
 class ProcessImage():
     def __init__(self):
+        # default configuration
+        # will be overwritten if model is available (SVM.p)
         self.model_config = {'color_space': cv2.COLOR_RGB2YCrCb, 'orient': 9,
                              'pix_per_cell': 16, 'cell_per_block': 2,
                              'hog_channel': 'ALL', 'spatial_size': (16, 16),
@@ -59,10 +61,10 @@ class ProcessImage():
         self.heat = None
         self.thres_cnt = 0
         self.cnt = 0
-        self.DEBUG = True
+        self.DEBUG = False
         self.frame_nr = 0
         self.use_sliding_window = True
-        self.parallel = 'serial' #'process'
+        self.parallel = 'serial'
 
     def fit(self, laneFit):
         model = Model()
@@ -83,14 +85,14 @@ class ProcessImage():
         self.windows = []
         if True:
             # triangular shape of the ROI
-            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
+            self.windows.extend(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
                                         xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-            self.windows.append(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
+            self.windows.extend(slide_window_triangle(x_start_stop=(800, 1280), y_start_stop=(390, 550), 
                                         xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
         else:
-            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
+            self.windows.extend(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518), 
                                        xy_window=(64, 64), xy_overlap=(0.5, 0.5)))
-            self.windows.append(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518),
+            self.windows.extend(slide_window(x_start_stop=(800, 1280), y_start_stop=(390, 518),
                                        xy_window=(96, 96), xy_overlap=(0.5, 0.5)))
              
 
@@ -117,25 +119,27 @@ class ProcessImage():
             self.heat = np.zeros_like(img[:,:,0]).astype(np.float)
         
         # processing on single windows or HOG feature extraction of complete image
-        if self.use_sliding_window:
+        if self.use_sliding_window:         # Sliding window approach without HOG subsampling
+            # parallelization is slower in this case
             if self.parallel == 'process':
                 box_list = []
+                numwin = len(self.windows)
+                numproc = 2
                 sliding_window_desc = [
-                    (img, self.windows[0], self.model_config, self.feat_extr),
-                    (img, self.windows[1], self.model_config, self.feat_extr),
-                    (img, self.windows[2], self.model_config, self.feat_extr)]
+                    (img, self.windows[i*int(numwin/numproc) : (i+1)*int(numwin/numproc)], self.model_config, self.feat_extr) for i in range(numproc)]
                 
-                if self.parallel == 'process':
-                    with concurrent.futures.ProcessPoolExecutor() as executor:
-                        res = executor.map(find_cars_sliding, sliding_window_desc)
-                        for r in res:
-                            print('Adding {} boxes'.format(len(r)))
-                            box_list.extend(r)
+                with concurrent.futures.ProcessPoolExecutor() as executor:
+                    res = executor.map(find_cars_sliding, sliding_window_desc)
+                    for r in res:
+                        box_list.extend(r)
             else:
+                # calculation with only one process is faster for the small window size
                 box_list = []
-                for windows in self.windows:
-                    box_list.extend(search_windows(img, windows, self.model_config, self.feat_extr))
+
+                # search inside the windows
+                box_list= search_windows(img, self.windows, self.model_config, self.feat_extr)
         else:
+            # algorithm with HOG subsampling
             box_list = []
             sliding_window_desc = [(img, {'scale': 1.0, 'y_top': 400, 'y_bottom': 600, 'x_left': 640, 'x_right': 1280}),
                                    (img, {'scale': 1.5, 'y_top': 400, 'y_bottom': 650, 'x_left': 640, 'x_right': 1280}),
@@ -143,11 +147,13 @@ class ProcessImage():
                                     ]
             t0 = time.time()
             if self.parallel == 'process':
+                # parallelization with processes
                 with concurrent.futures.ProcessPoolExecutor() as executor:
                     res = executor.map(self.find_cars.find_cars, sliding_window_desc)
                     for r in res:
                         box_list.extend(r[0])
             else:
+                # only one process used
                 for i, swd in enumerate(sliding_window_desc):                    
                     box, _ = self.find_cars.find_cars(swd)
                     box_list.extend(box)
@@ -167,7 +173,7 @@ class ProcessImage():
 
         heat_thres = apply_threshold(self.heat.copy(), 3)
         
-        heatmap_img = np.dstack((self.heat, np.zeros_like(heat), np.zeros_like(heat)))
+        heatmap_img = np.dstack((np.clip(self.heat * 50, 0, 255), np.zeros_like(self.heat), np.zeros_like(self.heat)))
 
         # Find final boxes from heatmap using label function
         labels = label(heat_thres)
@@ -183,10 +189,10 @@ class ProcessImage():
         # debug: show single boxes and heatmap
         if False:
             window_img = draw_boxes(window_img, box_list, color=(0, 255, 0), thick=1)
-            draw_image = cv2.addWeighted(draw_image, 1., 25*heatmap_img.astype(np.uint8), 1., 0)
+            window_img = cv2.addWeighted(window_img, 1., heatmap_img.astype(np.uint8), 1., 0)
 
         # show heatmap small at top right of image
-        heatmap_small = cv2.resize(heatmap_img.astype(np.uint8), (0, 0), fx=0.15, fy=0.15).reshape((108, 192, 3)) * 255
+        heatmap_small = cv2.resize(heatmap_img.astype(np.uint8), (0, 0), fx=0.15, fy=0.15).reshape((108, 192, 3))
         offset_small = 26
         offset_x_small = 600
         window_img[offset_small:offset_small + 108, offset_x_small+484:offset_x_small+676, :] = heatmap_small
@@ -206,7 +212,7 @@ if __name__ == "__main__":
         img = cv2.image = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         procimg = ProcessImage()
         procimg.fit(None)
-        boxes = procimg.windows[0]+procimg.windows[1]
+        boxes = procimg.windows
         print(boxes)
         img = draw_boxes(img, boxes, color=(0, 255, 0), thick=2)        
         img = cv2.image = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)

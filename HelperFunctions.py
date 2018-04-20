@@ -206,7 +206,8 @@ def search_windows_slide(img, windows, feat_extr, x_scaler, model):
     #2) Iterate over all windows in the list
     for window in windows:
         #3) Extract the test window from original image
-        test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
+        if img.shape[0] != 64:
+            test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))      
         #4) Extract features for that window using single_img_features()
         features = feat_extr.calc_features(test_img)
         #5) Scale extracted features to be fed to classifier        
@@ -238,7 +239,7 @@ def find_cars_sliding(args):
     box_list = search_windows_slide(img, windows, feat_extr, x_scaler, model)
 
     t1 = time.time()
-    print('Time for boxes: {:.3f}'.format(t1-t0))
+    #print('Time for boxes: {:.3f}'.format(t1-t0))
 
     return box_list
 
