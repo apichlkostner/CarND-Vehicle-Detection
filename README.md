@@ -100,7 +100,6 @@ The regularization parameter finally used was C=0.001 which gave the best result
 The model is encapsulated in the `Model` object in `Model.py`. When its `fit()` method is called it tries to load itself with the corresponding feature parameter from the file SVM.p. If the file is not available it loads the training images and fits a new model which is then saved.
 
 ## Parameter search
-
 To find the best parameter with the given train and test first some manual tests with some values were done. The search is implemented in `Model.py` in the `main()` function.
 
 
@@ -150,10 +149,10 @@ To speed up the search the four C parameters were calculated in parallel using f
 
 # Sliding windows
 
-The first try first calculated the HOG features of the complete region of interest and the sliding window algorithm calculateded the feature vector from the resized image and the corresponding parts of the HOG image.
-This improved the algorithm speed since for overlapping windows less HOG caluclations had to be done. This algorithm is implemented in `ProcessImage.py` in line 139.
+The first try calculated the HOG features of the complete region of interest and the sliding window algorithm calculateded the feature vector from the resized image and the corresponding parts of the HOG image.
+This improved the algorithms speed since for overlapping windows less HOG caluclations had to be done. This algorithm is implemented in `ProcessImage.py` in line 139.
 
-But even this algorithm was to slow. To improve the speed further the next idea was to only detect cars at the borders on the image and track the cars with a car object that has position and speed and updates it's position with every frame based on the speed and the new frame around the predicted position (this is currently not finished).
+But even this algorithm was to slow. To improve the speed further the next idea was to only detect cars at the borders on the image and track the cars with as an object that has position and speed and updates it's position with every frame based on the speed and the new frame around the predicted position (this is currently not finished).
 
 To achieve this the algorithm was changed to calculate features for every window separetely without using the HOG subsampling.
 
@@ -161,9 +160,9 @@ Tests were done with a triangular region on the right side where the other cars 
 
 To improve the speed an overlap of only 0.5 of the slinding window was used and in the lower part of the image only larger windows sizes with (96, 96) pixels were used.
 
-In the upper part also windows with size (64, 64) were used.
+In the upper part also windows with size (64, 64) pixels were used.
 
-With smaller windows and more overlap the detection accuracy could be improved but the calculation time becomes much worse. Especially bounding boxes are often too big because the windows have a relatively large distance to each other. The implementation is done in `ProcessImage.py` in line 136.
+With smaller windows and more overlap the detection accuracy could be improved but the calculation time becomes much worse. With the current overlap the bounding boxes are often too big because the windows have a relatively large distance to each other. The implementation is done in `ProcessImage.py` in line 136.
 
 ![Windows](output_images/boxes.jpg)
 
@@ -177,6 +176,8 @@ Since the classifier detects many false positives the following methods to supre
 * Rejecting positives with less than 90% confidence
 * Testing the video performance with many of the good classifiers found by the parameter search and choosing the best manually
 * Hard negative mining with samples extracted from the video
+
+From the heatmap the final bounding boxes are calculated using the `scipy` function `label`.
 
 Here are some examples, red is the heat map, green boxes are single positives, blue boxes are the final detection:
 ![Heatmap1](output_images/heatmap1.jpg)
@@ -202,7 +203,7 @@ Some samples from KITTI data:
 
 
 ### Udacity datset
- To extract the images from the udacity dataset the csv file is read as a pandas dataframe and for every row the corresponding image is extracted.
+To extract the images from the udacity dataset the csv file is read as a pandas dataframe and for every row the corresponding image is extracted.
 
 Only some of the car images are taken from this data set since many of the images are cars from the front side and this project needs to detect only cars from behind.
 
@@ -256,7 +257,7 @@ Only for new parameter combinations the model is fitted and the results are stor
 |ProcessImage.py  | Pipeline for vehicle detection |
 |ProcessImageLane.py | Pipeline for lane detection |
 |Model.py         | Encapsulates the SVM including parameters, training, save and load |
-|FeatureExtrac.py | Encapsulates the feature extraction using HOG, color histogram and spatial histogram, including parameters |
+|FeatureExtract.py | Encapsulates the feature extraction using HOG, color histogram and spatial histogram, including parameters |
 |HelperFunctions.py | Helper functions like drawing boxes or generating box sets |
 |FindCars.py      | Older search algorithm |
 |Vehicles.py     | First try with a vehicle object for tracking |
@@ -274,11 +275,10 @@ With the simple sliding window approach it seems to be impossible to find all ca
 
 To overcome this problem it might be necessary to have a good object tracking with postions, velocities and probabilities what object it is.
 
-An implementation in a fast compilable language is also necessary since the algorithm can't be vectorized efficiently. The sliding window approach needs a double nested loop which should be much faster in a compiled version.
+An implementation in a fast compilable language is also necessary since the algorithm can't be vectorized efficiently. The sliding window approach needs a double nested loop which would be much faster in a compiled version.
 
 # References:
-
-* https://wiki.python.org/moin/GlobalInterpreterLock
 * http://www.cvlibs.net/datasets/kitti/
 * http://www.gti.ssr.upm.es/data/Vehicle_database.html
 * https://docs.python.org/3/library/concurrent.futures.html
+* https://wiki.python.org/moin/GlobalInterpreterLock
